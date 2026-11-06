@@ -45,14 +45,18 @@ class ViewerApp:
         self._add_ground()
         self.boxes = {obj.object_id: self._add_object(obj) for obj in scene.objects}
 
-        first_route = next((obj.route for obj in ordered if obj.route), None)
-        self.player = PathPlayer(first_route.waypoints if first_route else [(0.0, 0.0, 0.0)])
-        self.person = Person(self.server, self.player.position(), self._first_heading())
-        if first_route:
-            self._draw_route(first_route.waypoints)
+        # The object at the end of the loaded route.
+        self.route_target = next((obj for obj in ordered if obj.route), None)
+        waypoints = self.route_target.route.waypoints if self.route_target else [(0.0, 0.0, 0.0)]
+        self.player = PathPlayer(waypoints)
+        self.person = Person(self.server, self.player.position(), self.player.heading())
+        self._draw_route(waypoints)
 
         self.destination: LiveObject | None = None  # the object being walked to
-        self.pending_target: str | None = None  # set by the GUI thread, used by the frame loop
+        # Set by the GUI thread, used by the frame loop.
+        self.pending_target: str | None = None
+        self.pending_play: str | None = None
+        self.pending_reset = False
         self.highlighted: set[str] = set()
         self.shown_id: str | None = None  # the object the panels are showing
         self._add_gui()
@@ -95,13 +99,6 @@ class ViewerApp:
         )
         return box
 
-    def _first_heading(self) -> float:
-        waypoints = self.player.waypoints
-        if len(waypoints) < 2:
-            return 0.0
-        first_leg = waypoints[1] - waypoints[0]
-        return float(np.arctan2(first_leg[1], first_leg[0]))
-
     def _draw_route(self, waypoints: list) -> None:
         if len(waypoints) < 2:
             return
@@ -136,9 +133,9 @@ class ViewerApp:
             self.diagnosis_panel = gui.add_markdown("")
 
         navigate_button.on_click(self._on_navigate)
-        play_button.on_click(lambda _: self.player.play())
+        play_button.on_click(self._on_play)
         pause_button.on_click(lambda _: self.player.pause())
-        reset_button.on_click(lambda _: self.player.reset())
+        reset_button.on_click(self._on_reset)
 
     def _summary(self) -> str:
         count = len(self.scene.faulty)
@@ -147,18 +144,47 @@ class ViewerApp:
     def _on_navigate(self, _event: object) -> None:
         self.pending_target = self.target_dropdown.value
 
+    def _on_play(self, _event: object) -> None:
+        self.pending_play = self.target_dropdown.value
+
+    def _on_reset(self, _event: object) -> None:
+        self.pending_reset = True
+
     def navigate(self, label: str) -> None:
         """Start walking the route to the object with this dropdown label."""
         obj = self.targets[label]
         if obj.route is None:
+            self.player.pause()
             self.destination = None
             self.status_panel.content = f"No route to {obj.name} in paths.json yet."
             return
         self.player.load(obj.route.waypoints)
         self._draw_route(obj.route.waypoints)
         self.player.play()
+        self.route_target = obj
         self.destination = obj
         self.status_panel.content = f"Walking to {obj.name}."
+
+    def play(self, label: str) -> None:
+        """Continue the walk to the object with this label, or start one if it's a new target."""
+        obj = self.targets[label]
+        if obj is not self.route_target or self.player.finished:
+            self.navigate(label)
+            return
+        self.player.play()
+        self.destination = obj
+        self.status_panel.content = f"Walking to {obj.name}."
+
+    def reset(self) -> None:
+        """Go back to the start of the loaded route, ready to walk it again."""
+        self.player.reset()
+        self.destination = self.route_target
+        if self.route_target is None:
+            self.status_panel.content = self._summary()
+        else:
+            self.status_panel.content = (
+                f"Back at the start. Press Play to walk to {self.route_target.name}."
+            )
 
     def _update_highlights(self, position: np.ndarray) -> None:
         # Only recolor the boxes whose highlight state changed this frame.
@@ -184,10 +210,16 @@ class ViewerApp:
         if self.pending_target is not None:
             self.navigate(self.pending_target)
             self.pending_target = None
+        if self.pending_play is not None:
+            self.play(self.pending_play)
+            self.pending_play = None
+        if self.pending_reset:
+            self.reset()
+            self.pending_reset = False
 
-        self.player.update(dt, self.speed_slider.value)
+        walked = self.player.update(dt, self.speed_slider.value)
         position = self.player.position()
-        self.person.move_to(position, dt)
+        self.person.move_to(position, self.player.heading(), walked, dt)
         self._update_highlights(position)
         self._update_panels(position)
 

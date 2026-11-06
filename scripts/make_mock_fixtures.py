@@ -102,15 +102,20 @@ def main() -> None:
     grid[34:, 25:] = v.unknown  # unscanned corner
 
     start = (-1.5, 1.0, 0.0)
-    goal = (0.3, 1.1, 0.0)
+    routes = {  # waypoints after the start, ending at the inspection position
+        "obj_0001": [(-0.5, 1.1, 0.0), (0.3, 1.1, 0.0)],
+        "obj_0002": [(-1.25, 0.0, 0.0), (-0.95, -0.25, 0.0)],
+        "obj_0003": [(-0.5, 0.2, 0.0), (0.25, -0.35, 0.0)],
+    }
     paths = [
         NavigationPath(
             scene_id=SCENE,
             start=start,
-            target_object_id="obj_0001",
-            inspection_position=goal,
-            waypoints=[start, (-0.5, 1.1, 0.0), goal],
+            target_object_id=object_id,
+            inspection_position=waypoints[-1],
+            waypoints=[start, *waypoints],
         )
+        for object_id, waypoints in routes.items()
     ]
     mappings = [
         AssetMapping(

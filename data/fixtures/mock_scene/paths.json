@@ -30,5 +30,69 @@
         0.0
       ]
     ]
+  },
+  {
+    "schema_version": "1.0",
+    "scene_id": "mock_equipment_room",
+    "start": [
+      -1.5,
+      1.0,
+      0.0
+    ],
+    "target_object_id": "obj_0002",
+    "inspection_position": [
+      -0.95,
+      -0.25,
+      0.0
+    ],
+    "waypoints": [
+      [
+        -1.5,
+        1.0,
+        0.0
+      ],
+      [
+        -1.25,
+        0.0,
+        0.0
+      ],
+      [
+        -0.95,
+        -0.25,
+        0.0
+      ]
+    ]
+  },
+  {
+    "schema_version": "1.0",
+    "scene_id": "mock_equipment_room",
+    "start": [
+      -1.5,
+      1.0,
+      0.0
+    ],
+    "target_object_id": "obj_0003",
+    "inspection_position": [
+      0.25,
+      -0.35,
+      0.0
+    ],
+    "waypoints": [
+      [
+        -1.5,
+        1.0,
+        0.0
+      ],
+      [
+        -0.5,
+        0.2,
+        0.0
+      ],
+      [
+        0.25,
+        -0.35,
+        0.0
+      ]
+    ]
   }
 ]

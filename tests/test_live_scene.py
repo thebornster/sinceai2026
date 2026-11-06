@@ -51,8 +51,17 @@ def test_faulty_means_not_healthy_in_the_equipment_data(scene):
 
 
 def test_routes_come_from_paths_json(scene):
-    assert by_id(scene, "obj_0001").route.target_object_id == "obj_0001"
+    for obj in scene.objects:
+        assert obj.route.target_object_id == obj.object_id
+
+
+def test_object_missing_from_paths_json_has_no_route(tmp_path):
+    root = copy_mock(tmp_path)
+    paths = load_list(root / PATHS_FILE, NavigationPath)
+    save_list(root / PATHS_FILE, [p for p in paths if p.target_object_id != "obj_0002"])
+    scene = load_live_scene(root, offline=True)
     assert by_id(scene, "obj_0002").route is None
+    assert by_id(scene, "obj_0001").route is not None
 
 
 def test_shortest_route_wins():

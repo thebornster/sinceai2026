@@ -186,6 +186,17 @@ def test_mock_scene_is_consistent():
         assert (grid[cells[:, 0], cells[:, 1]] == v.free).all()
 
 
+def test_mock_routes_stay_in_free_cells_between_waypoints():
+    arts = SceneArtifacts.load(MOCK_SCENE_DIR)
+    grid = arts.load_occupancy()
+    for path in arts.paths:
+        waypoints = np.asarray(path.waypoints)
+        for start, end in zip(waypoints[:-1], waypoints[1:], strict=True):
+            line = start + np.linspace(0.0, 1.0, 200)[:, None] * (end - start)
+            cells = arts.navmap.world_to_cell(line)
+            assert (grid[cells[:, 0], cells[:, 1]] == arts.navmap.cell_values.free).all()
+
+
 def test_each_mock_file_loads_independently():
     """A consumer can read just the artifact it needs with plain JSON or the model."""
     raw = json.loads((MOCK_SCENE_DIR / OBJECTS_FILE).read_text())

@@ -20,6 +20,11 @@ class PathPlayer:
         # cumulative[i] is the distance from the start to waypoint i.
         self.cumulative = np.concatenate([[0.0], np.cumsum(segment_lengths)])
         self.total_length = float(self.cumulative[-1])
+        # Legs with a length, so repeated waypoints never decide the heading.
+        legs = np.flatnonzero(segment_lengths > 0.0)
+        self.leg_starts = self.cumulative[legs]
+        steps = np.diff(self.waypoints, axis=0)[legs]
+        self.leg_headings = np.arctan2(steps[:, 1], steps[:, 0])
         self.distance = 0.0
         self.playing = False
 
@@ -39,13 +44,25 @@ class PathPlayer:
         self.playing = False
         self.distance = 0.0
 
-    def update(self, dt: float, speed: float) -> None:
-        """Move forward by speed (m/s) for dt seconds, stopping at the last waypoint."""
+    def update(self, dt: float, speed: float) -> float:
+        """Move forward by speed (m/s) for dt seconds, stopping at the last waypoint.
+
+        Returns the distance actually walked.
+        """
         if not self.playing:
-            return
-        self.distance = min(self.distance + speed * dt, self.total_length)
+            return 0.0
+        before = self.distance
+        self.distance = min(before + speed * dt, self.total_length)
         if self.finished:
             self.playing = False
+        return self.distance - before
+
+    def heading(self) -> float:
+        """Direction of the current leg in radians, or 0 if the route has no length."""
+        if len(self.leg_headings) == 0:
+            return 0.0
+        leg = np.searchsorted(self.leg_starts, self.distance, side="right") - 1
+        return float(self.leg_headings[leg])
 
     def position(self) -> np.ndarray:
         """Current point on the route, between two waypoints."""

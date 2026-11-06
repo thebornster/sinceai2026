@@ -95,3 +95,24 @@ def test_find_nearby_and_nearest():
     assert find_nearby(position, centers, 5.0) == {"a", "b"}
     assert find_nearest(position, centers) == "a"
     assert find_nearest(np.array([2.9, 0.0, 0.0]), centers) == "b"
+
+
+def test_update_returns_the_distance_walked():
+    player = PathPlayer([(0, 0, 0), (1, 0, 0)])
+    assert player.update(0.1, 1.0) == 0.0  # not playing yet
+    player.play()
+    assert player.update(0.25, 1.0) == pytest.approx(0.25)
+    assert player.update(10.0, 1.0) == pytest.approx(0.75)  # stops at the end
+
+
+def test_heading_follows_the_current_leg():
+    player = PathPlayer([(0, 0, 0), (1, 0, 0), (1, 0, 0), (1, 2, 0), (1, 2, 0)])
+    assert player.heading() == pytest.approx(0.0)
+    player.distance = 1.5
+    assert player.heading() == pytest.approx(np.pi / 2)
+    player.distance = player.total_length  # a repeated last waypoint keeps the last real leg
+    assert player.heading() == pytest.approx(np.pi / 2)
+
+
+def test_heading_of_a_route_with_no_length_is_zero():
+    assert PathPlayer([(1, 2, 0)]).heading() == 0.0

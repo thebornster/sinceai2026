@@ -1,4 +1,5 @@
 import socket
+from dataclasses import replace
 
 import numpy as np
 import pytest
@@ -14,6 +15,7 @@ from valmet.viewer.app import (  # noqa: E402
     ViewerApp,
     target_label,
 )
+from valmet.viewer.avatar import STRIDE_LENGTH  # noqa: E402
 
 
 def free_port() -> int:
@@ -26,6 +28,18 @@ def free_port() -> int:
 def app(monkeypatch):
     monkeypatch.delenv(METADATA_DIR_ENV, raising=False)
     viewer = ViewerApp(load_live_scene(offline=True), port=free_port())
+    yield viewer
+    viewer.server.stop()
+
+
+@pytest.fixture
+def app_without_valve_route(monkeypatch):
+    monkeypatch.delenv(METADATA_DIR_ENV, raising=False)
+    scene = load_live_scene(offline=True)
+    objects = [
+        replace(obj, route=None) if obj.object_id == "obj_0002" else obj for obj in scene.objects
+    ]
+    viewer = ViewerApp(replace(scene, objects=objects), port=free_port())
     yield viewer
     viewer.server.stop()
 
@@ -82,7 +96,8 @@ def test_arriving_at_the_faulty_object_shows_it_red_with_its_diagnosis(app):
     assert "CAVITATION_RISK" in app.diagnosis_panel.content
 
 
-def test_target_without_a_route_says_so_and_does_not_move(app):
+def test_target_without_a_route_says_so_and_does_not_move(app_without_valve_route):
+    app = app_without_valve_route
     before = app.player.position()
     app.pending_target = label_of(app, "obj_0002")
     app.tick(0.1)
@@ -100,3 +115,109 @@ def test_highlight_follows_the_radius_slider(app):
     app.tick(0.1)
     assert color(app.boxes["obj_0001"]) == BOX_COLOR
     assert color(app.boxes["obj_0002"]) == BOX_COLOR
+
+
+def walk_frames(app: ViewerApp, frames: int) -> None:
+    app.pending_target = label_of(app, "obj_0001")
+    for _ in range(frames):
+        app.tick(1 / 30)
+
+
+def test_picking_a_target_without_a_route_stops_a_walk_in_progress(app_without_valve_route):
+    app = app_without_valve_route
+    walk_frames(app, 10)
+    app.pending_target = label_of(app, "obj_0002")
+    app.tick(1 / 30)
+    stopped_at = app.player.position()
+    assert not app.player.playing
+    for _ in range(10):
+        app.tick(1 / 30)
+    np.testing.assert_allclose(app.player.position(), stopped_at)
+
+
+def test_reset_near_the_start_is_a_jump_not_a_step(app):
+    walk_frames(app, 10)  # about 0.33 m along the route
+    phase = app.person.phase
+    app.pending_reset = True
+    app.tick(1 / 30)
+    assert app.person.phase == phase
+    assert app.person.heading == pytest.approx(app.player.heading())
+
+
+def test_reset_faces_the_first_leg_and_updates_the_status(app):
+    app.pending_target = label_of(app, "obj_0001")
+    app.tick(0.1)
+    run_until_stopped(app)
+    app.pending_reset = True
+    app.tick(0.1)
+    first_leg = app.player.waypoints[1] - app.player.waypoints[0]
+    assert app.person.heading == pytest.approx(np.arctan2(first_leg[1], first_leg[0]))
+    assert app.status_panel.content == (
+        "Back at the start. Press Play to walk to P-002 pump (obj_0001)."
+    )
+
+
+def test_walking_again_after_reset_reports_arrival(app):
+    walk_frames(app, 10)
+    app.pending_reset = True
+    app.tick(0.1)
+    app.pending_play = label_of(app, "obj_0001")
+    app.tick(0.1)
+    run_until_stopped(app)
+    assert app.status_panel.content == "Arrived at P-002 pump (obj_0001)."
+
+
+def test_a_slow_frame_at_top_speed_keeps_the_walk_going(app):
+    app.speed_slider.value = 5.0
+    app.player.load([(0.0, 0.0, 0.0), (40.0, 0.0, 0.0)])
+    app.player.play()
+    for _ in range(30):
+        app.tick(1 / 30)
+    phase = app.person.phase
+    app.tick(0.15)  # 0.75 m in one frame
+    assert app.person.swing > 0.9
+    assert app.person.phase - phase == pytest.approx(2 * np.pi * 0.75 / STRIDE_LENGTH)
+
+
+def test_walking_cycle_follows_the_distance_walked(app):
+    app.pending_target = label_of(app, "obj_0001")
+    app.tick(0.1)
+    run_until_stopped(app)
+    assert app.person.phase == pytest.approx(2 * np.pi * app.player.total_length / STRIDE_LENGTH)
+
+
+@pytest.mark.parametrize("object_id", ["obj_0001", "obj_0002", "obj_0003"])
+def test_navigate_reaches_the_selected_object(app, object_id):
+    app.pending_target = label_of(app, object_id)
+    app.tick(0.1)
+    run_until_stopped(app)
+    obj = app.objects[object_id]
+    np.testing.assert_allclose(app.player.position(), obj.route.inspection_position)
+    assert app.status_panel.content == f"Arrived at {obj.name}."
+
+
+def test_play_walks_to_the_selected_object_not_the_loaded_route(app):
+    app.pending_play = label_of(app, "obj_0002")
+    app.tick(0.1)
+    run_until_stopped(app)
+    route = app.objects["obj_0002"].route
+    np.testing.assert_allclose(app.player.position(), route.inspection_position)
+
+
+def test_play_continues_a_paused_walk_to_the_same_object(app):
+    walk_frames(app, 10)
+    app.player.pause()
+    app.tick(1 / 30)
+    paused_at = app.player.distance
+    app.pending_play = label_of(app, "obj_0001")
+    app.tick(1 / 30)
+    assert app.player.distance > paused_at
+    assert app.status_panel.content == "Walking to P-002 pump (obj_0001)."
+
+
+def test_play_on_a_target_without_a_route_does_not_walk_the_old_route(app_without_valve_route):
+    app = app_without_valve_route
+    app.pending_play = label_of(app, "obj_0002")
+    app.tick(0.1)
+    assert not app.player.playing
+    assert "No route to CV-002 valve (obj_0002)" in app.status_panel.content

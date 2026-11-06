@@ -190,8 +190,9 @@ the equipment data isn't `healthy`.
 - `integration/live_scene.py` joins scene artifacts with `valmet.api` once at startup. It's the
   only viewer code that touches other modules.
 - Routes come only from `paths.json`, matched on `target_object_id`. The shortest one is used if an
-  object has several. Objects with no route show a message instead of moving. The mock scene only
-  has a route to `obj_0001`.
+  object has several. Objects with no route show a message instead of moving.
+- Play continues the current walk if its object is still selected. Otherwise it starts the selected
+  object's route.
 - Each route is walked from its own `start`, so the avatar jumps there first.
 - Device data comes from `valmet.api`, so the viewer ignores `asset_mapping.json` in the scene
   folder. For a real scene, set `$VALMET_METADATA_DIR` to that scene's metadata. Metadata from a

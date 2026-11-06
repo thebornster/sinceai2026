@@ -47,7 +47,7 @@ TORSO_OUTLINE = [
 STRIDE_LENGTH = 1.4  # meters walked in one full walking cycle
 TURN_RATE = 8.0  # how quickly the person turns to face their direction of travel
 SETTLE_RATE = 8.0  # how quickly the arms and legs ease in and out of walking
-JUMP_DISTANCE = 0.5  # a bigger move in one frame is a jump (Reset, new route), not walking
+JUMP_TOLERANCE = 1e-6  # moving further than this beyond the distance walked is a jump
 
 
 def lathe(outline: list, depth: float = 1.0, segments: int = 20) -> tuple[np.ndarray, np.ndarray]:
@@ -228,22 +228,23 @@ class Person:
             shoulder.wxyz = turn_about_y(0.4 * self.swing * np.sin(cycle))
             elbow.wxyz = turn_about_y(-0.15 - 0.3 * self.swing)
 
-    def move_to(self, position: np.ndarray, dt: float) -> None:
-        """Move to position, turning to face the way they're going and walking."""
+    def move_to(self, position: np.ndarray, heading: float, walked: float, dt: float) -> None:
+        """Move to position and turn toward heading, animating the distance walked.
+
+        Moving further than walked is a jump (Reset, new route), so they face heading at once.
+        """
         position = np.array(position, dtype=float)
-        step = position - self.position
-        moved = float(np.linalg.norm(step[:2]))
+        moved = float(np.linalg.norm((position - self.position)[:2]))
         self.position = position
 
-        if moved > JUMP_DISTANCE:
-            moved = 0.0  # jumped, so there's nothing to walk
-        walking = moved > 1e-6
-        if walking:
-            target = np.arctan2(step[1], step[0])
+        if moved > walked + JUMP_TOLERANCE:
+            self.heading = heading
+        else:
             # Wrap the difference so they always turn the short way round.
-            turn = (target - self.heading + np.pi) % (2.0 * np.pi) - np.pi
+            turn = (heading - self.heading + np.pi) % (2.0 * np.pi) - np.pi
             self.heading += turn * min(1.0, TURN_RATE * dt)
-            self.phase += 2.0 * np.pi * moved / STRIDE_LENGTH
+        walking = walked > 0.0
+        self.phase += 2.0 * np.pi * walked / STRIDE_LENGTH
 
         self.root.position = position
         self.root.wxyz = turn_about_z(self.heading)
