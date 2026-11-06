@@ -5,3 +5,6 @@
 # Open3D >=0.19 ships wheels for Python 3.11 that work with NumPy 2.
 # SciPy (in core) covers ndimage morphology for clearance dilation and heapq covers A*.
 open3d>=0.19
+
+# Preprocessing preview images (reports/preview/*.png).
+matplotlib>=3.8

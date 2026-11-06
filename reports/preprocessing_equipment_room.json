@@ -1,0 +1,113 @@
+{
+  "scene_id": "equipment_room",
+  "source": "Equipment Room.ply",
+  "cleaning": {
+    "params": {
+      "min_opacity": 0.1,
+      "max_scale_percentile": 99.0,
+      "crop_percentiles": [
+        0.2,
+        99.8
+      ],
+      "outlier_neighbors": 20,
+      "outlier_std_ratio": 2.0
+    },
+    "input_count": 1676481,
+    "kept_count": 859092,
+    "removed": {
+      "nonfinite": 0,
+      "low_opacity": 762150,
+      "oversized": 9144,
+      "outside_crop": 10834,
+      "statistical_outlier": 35261
+    },
+    "max_scale_limit": 0.1659280974155374,
+    "crop_bounds_source": {
+      "min": [
+        -4.915188837051391,
+        -1.4546409735679626,
+        -4.936713928222656
+      ],
+      "max": [
+        4.244268852233887,
+        1.3576958293914818,
+        3.5655726242065464
+      ]
+    }
+  },
+  "world_frame": {
+    "params": {
+      "core_min_opacity": 0.5,
+      "voxel_size": 0.02,
+      "up_hint": [
+        0.0,
+        -1.0,
+        0.0
+      ],
+      "slab_quantile": 0.3,
+      "slab_half_width": 0.15,
+      "plane_threshold": 0.01,
+      "plane_iterations": 2000,
+      "max_tilt_deg": 20.0,
+      "seed": 0
+    },
+    "core_point_count": 91045,
+    "up_source": [
+      0.0182992225611949,
+      -0.9994848292250819,
+      0.026366922508415845
+    ],
+    "floor_plane_source": {
+      "normal": [
+        -0.0023794973333206297,
+        -0.9999815532128304,
+        0.005588490538232483
+      ],
+      "d": 1.1689465424679393,
+      "inliers": 2798
+    },
+    "floor_tilt_from_pca_deg": 1.679910896526565,
+    "ceiling_plane_source": {
+      "normal": [
+        -0.007960896134867636,
+        -0.9999662274305131,
+        0.0020416001364815736
+      ],
+      "d": -0.85212949333088,
+      "inliers": 2346,
+      "distance_from_floor": 2.0210760357988193
+    },
+    "wall_yaw_deg": -0.149749017825298,
+    "manhattan_strength": 0.23635602004688924,
+    "scale": 1.1648,
+    "scale_source": "explicit"
+  },
+  "world_bounds_p1_p99": {
+    "min": [
+      -5.202113912532356,
+      -4.193097079096841,
+      -0.03341336973592118
+    ],
+    "max": [
+      5.229240296593939,
+      4.1544124607111925,
+      2.544249325113426
+    ]
+  },
+  "outputs": {
+    "manifest": "data/processed/equipment_room/scene_manifest.json",
+    "scene_clean": "data/processed/equipment_room/scene_clean.npz",
+    "viewer_splats": "data/processed/equipment_room/viewer_splats.npz"
+  },
+  "previews": [
+    "reports/preview/equipment_room_topdown.png",
+    "reports/preview/equipment_room_side_xz.png",
+    "reports/preview/equipment_room_side_yz.png"
+  ],
+  "timings_s": {
+    "load": 0.43,
+    "clean": 0.8,
+    "world_frame": 0.14,
+    "write": 1.42
+  }
+}
