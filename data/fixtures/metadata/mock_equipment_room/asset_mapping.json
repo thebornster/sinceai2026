@@ -1,0 +1,23 @@
+[
+  {
+    "schema_version": "1.0",
+    "scene_id": "mock_equipment_room",
+    "scene_object_id": "obj_0001",
+    "equipment_id": "ASSET-014",
+    "method": "procedural"
+  },
+  {
+    "schema_version": "1.0",
+    "scene_id": "mock_equipment_room",
+    "scene_object_id": "obj_0002",
+    "equipment_id": "ASSET-002",
+    "method": "matched"
+  },
+  {
+    "schema_version": "1.0",
+    "scene_id": "mock_equipment_room",
+    "scene_object_id": "obj_0003",
+    "equipment_id": "ASSET-001",
+    "method": "random"
+  }
+]

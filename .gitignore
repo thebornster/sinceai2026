@@ -62,3 +62,4 @@ reports/**/*.mp4
 
 # --- Small version-controlled fixtures (keep these tiny) ---
 !data/fixtures/**
+!data/raw/equipment.xlsx
