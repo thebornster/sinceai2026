@@ -1,0 +1,14 @@
+# Shared core environment (Python 3.11). Every other requirements file includes this one.
+# Lower bounds only: they are the oldest versions with the APIs we rely on
+# (NumPy 2-compatible stack, Pydantic v2). Upper bounds only where a major
+# version would break the code.
+numpy>=1.26,<3
+scipy>=1.11
+plyfile>=1.0
+pydantic>=2.6,<3
+pandas>=2.1
+openpyxl>=3.1
+
+# Dev tooling
+pytest>=8.0
+ruff>=0.6

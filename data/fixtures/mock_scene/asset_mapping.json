@@ -1,0 +1,16 @@
+[
+  {
+    "schema_version": "1.0",
+    "scene_id": "mock_equipment_room",
+    "scene_object_id": "obj_0001",
+    "equipment_id": "PMP-101",
+    "method": "matched"
+  },
+  {
+    "schema_version": "1.0",
+    "scene_id": "mock_equipment_room",
+    "scene_object_id": "obj_0002",
+    "equipment_id": "VLV-204",
+    "method": "random"
+  }
+]

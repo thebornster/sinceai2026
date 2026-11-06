@@ -1,0 +1,41 @@
+{
+  "schema_version": "1.0",
+  "scene_id": "mock_equipment_room",
+  "source_filename": "mock_equipment_room.ply",
+  "source_sha256": null,
+  "source_vertex_count": 0,
+  "coordinate_system": {
+    "handedness": "right",
+    "up_axis": "+Z",
+    "units": "meters",
+    "meters_per_unit": 1.0,
+    "verified": true,
+    "notes": "MOCK. Pretends the source was Y-up; source_to_world rotates +90 deg about X."
+  },
+  "source_to_world": [
+    [
+      1.0,
+      0.0,
+      0.0,
+      0.0
+    ],
+    [
+      0.0,
+      0.0,
+      -1.0,
+      0.0
+    ],
+    [
+      0.0,
+      1.0,
+      0.0,
+      0.0
+    ],
+    [
+      0.0,
+      0.0,
+      0.0,
+      1.0
+    ]
+  ]
+}

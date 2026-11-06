@@ -1,0 +1,64 @@
+# --- Python ---
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage
+htmlcov/
+
+# --- Virtual environments ---
+.venv/
+venv/
+env/
+
+# --- Secrets ---
+.env
+.env.*
+!.env.example
+
+# --- IDE / notebooks ---
+.idea/
+.vscode/
+*.swp
+.DS_Store
+Thumbs.db
+.ipynb_checkpoints/
+
+# --- Data: raw industrial inputs and generated scene artifacts ---
+data/raw/*
+!data/raw/.gitkeep
+data/processed/*
+!data/processed/.gitkeep
+
+# Large binary scene / model formats anywhere (fixtures are re-allowed below)
+*.ply
+*.splat
+*.ksplat
+*.spz
+*.npz
+*.npy
+*.pt
+*.pth
+*.onnx
+*.engine
+*.safetensors
+*.ckpt
+*.xlsx
+*.xls
+
+# --- Model weights ---
+models/weights/*
+!models/weights/.gitkeep
+
+# --- Reports: keep small JSON reports, drop renders / large outputs ---
+reports/renders/
+reports/**/*.png
+reports/**/*.jpg
+reports/**/*.mp4
+
+# --- Small version-controlled fixtures (keep these tiny) ---
+!data/fixtures/**

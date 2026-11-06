@@ -1,0 +1,37 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "valmet-industrial-metaverse"
+version = "0.1.0"
+description = "Since AI Hackathon 2026 - Valmet industrial metaverse prototype"
+readme = "README.md"
+requires-python = ">=3.11"
+# Only what the shared package (valmet.common, valmet.preprocessing) needs to import.
+# Full environments are defined by the requirements-*.txt files.
+dependencies = [
+    "numpy>=1.26",
+    "pydantic>=2.6,<3",
+]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-ra --strict-markers"
+markers = [
+    "real_data: requires data/raw/Equipment Room.ply (skipped when absent)",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+src = ["src", "scripts", "tests"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "UP", "NPY", "SIM"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["valmet"]

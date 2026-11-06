@@ -1,0 +1,7 @@
+# Developer 1 - spatial pipeline (floor/obstacles, occupancy grid, A*).
+-r requirements-core.txt
+
+# Point-cloud processing: RANSAC plane fitting, DBSCAN, voxel downsampling, KD-trees.
+# Open3D >=0.19 ships wheels for Python 3.11 that work with NumPy 2.
+# SciPy (in core) covers ndimage morphology for clearance dilation and heapq covers A*.
+open3d>=0.19

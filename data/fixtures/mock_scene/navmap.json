@@ -1,0 +1,26 @@
+{
+  "schema_version": "1.0",
+  "scene_id": "mock_equipment_room",
+  "origin": [
+    -2.0,
+    -1.5,
+    0.0
+  ],
+  "resolution": 0.1,
+  "shape": [
+    40,
+    30
+  ],
+  "grid_file": "occupancy.npy",
+  "cell_values": {
+    "free": 0,
+    "occupied": 1,
+    "unknown": 255
+  },
+  "clearance": {
+    "radius": 0.25,
+    "height": 1.7,
+    "max_step_height": 0.05
+  },
+  "obstacles_inflated": true
+}

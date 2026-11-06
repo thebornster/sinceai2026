@@ -1,0 +1,5 @@
+# Developer 4 - Viser viewer (Gaussian splats, boxes, avatar, panels).
+-r requirements-core.txt
+
+# Viser >=1.0 has a stable scene/GUI API and Gaussian-splat rendering (add_gaussian_splats).
+viser>=1.0

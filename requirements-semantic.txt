@@ -1,0 +1,18 @@
+# Developer 2 - semantic pipeline (YOLOE / SAM investigation).
+#
+# INSTALL PYTORCH FIRST, matched to your OS / GPU / CUDA driver, from
+# https://pytorch.org/get-started/locally/ - for example:
+#   CPU only:  pip install torch torchvision --index-url https://download.pytorch.org/whl/cpu
+#   CUDA 12.x: pip install torch torchvision --index-url https://download.pytorch.org/whl/cu126
+# Then install this file. If torch is missing, pip pulls the default PyPI
+# build (CPU-only on Windows/macOS, a CUDA build on Linux), which may not match your machine.
+-r requirements-core.txt
+
+# YOLOE (open-vocabulary detection/segmentation) and SAM / SAM 2 / MobileSAM
+# wrappers. YOLOE needs ultralytics >= 8.3.99. Pulls in opencv-python and pillow.
+# YOLOE text prompts download extra CLIP code (ultralytics/CLIP from git) the first
+# time they run, so git and network access are needed then.
+ultralytics>=8.3.99
+
+# Official facebookresearch/sam2 is NOT installed here (it builds from git and
+# can need CUDA tooling). See README "SAM 2" before installing it.
