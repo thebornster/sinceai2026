@@ -273,7 +273,14 @@ def test_target_without_a_route_gets_one_planned_from_the_avatar(app_planning_va
     assert app.status_panel.content == "Arrived at CV-002 valve (obj_0002)."
 
 
+def test_labels_are_off_except_for_the_selection(app):
+    assert not any(label.visible for label in app.labels.values())
+    app.select("obj_0002")
+    assert [i for i, label in app.labels.items() if label.visible] == ["obj_0002"]
+
+
 def test_faulty_only_hides_healthy_objects_but_keeps_selection_and_destination(app):
+    app.labels_checkbox.value = True
     app.show_dropdown.value = "Faulty only"
     app.apply_visibility()
     assert app.boxes["obj_0001"].visible and app.labels["obj_0001"].visible  # faulty
@@ -292,7 +299,6 @@ def test_faulty_only_hides_healthy_objects_but_keeps_selection_and_destination(a
 
 
 def test_selection_is_filled_and_can_be_shown_alone(app):
-    app.labels_checkbox.value = False
     app.select("obj_0002")
     assert app.labels["obj_0002"].visible  # the selected label stays on
     assert not app.labels["obj_0001"].visible

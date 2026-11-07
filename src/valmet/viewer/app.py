@@ -137,6 +137,7 @@ class ViewerApp:
             target_label(obj),
             position=(x, y, z + bbox.extent[2] / 2 + 0.15),
             anchor="bottom-center",
+            visible=False,  # only the selected object's label, unless "Show labels" is on
         )
         return box
 
@@ -160,7 +161,7 @@ class ViewerApp:
             self.status_panel = gui.add_markdown(self._summary())
         with gui.add_folder("Display"):
             self.show_dropdown = gui.add_dropdown("Show", (SHOW_ALL, SHOW_FAULTY))
-            self.labels_checkbox = gui.add_checkbox("Show labels", initial_value=True)
+            self.labels_checkbox = gui.add_checkbox("Show labels", initial_value=False)
             self.isolate_checkbox = gui.add_checkbox("Only show selected", initial_value=False)
         with gui.add_folder("Playback"):
             play_button = gui.add_button("Play")
