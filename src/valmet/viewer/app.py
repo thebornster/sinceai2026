@@ -2,27 +2,35 @@
 
 Pick an object, press Navigate, and the avatar walks that object's route from
 paths.json. Routes are computed by the spatial pipeline; the viewer only plays them.
+Click a box to inspect it, fly the camera to it, or ask the LLM copilot for a diagnosis.
 """
 
 from __future__ import annotations
 
+import threading
 import time
+from dataclasses import replace
 
+import imageio.v3 as iio
 import numpy as np
 import viser
 import viser.transforms as tf
 
+from valmet import api
 from valmet.integration.live_scene import LiveObject, LiveScene
 from valmet.viewer.avatar import Person
 from valmet.viewer.panels import format_diagnosis, format_metadata
-from valmet.viewer.playback import PathPlayer, find_nearby, find_nearest
+from valmet.viewer.playback import PathPlayer, find_nearby, find_nearest, pick_object
 
 BOX_COLOR = (120, 144, 170)
 HIGHLIGHT_COLOR = (60, 220, 120)  # boxes close to the avatar
 FAULT_COLOR = (230, 40, 40)  # faulty boxes close to the avatar
+SELECTED_COLOR = (255, 0, 255)  # the clicked box
 ROUTE_COLOR = (40, 120, 255)
 ROUTE_LIFT = 0.02  # keeps the route line just above the floor grid
 FRAME_TIME = 1.0 / 30.0  # seconds between updates (30 per second)
+FLY_MIN_DISTANCE = 1.2  # meters from the camera to a small object after "Fly to"
+FLY_EXTENT_FACTOR = 2.0  # camera distance per meter of box diagonal
 
 
 def target_label(obj: LiveObject) -> str:
@@ -30,7 +38,7 @@ def target_label(obj: LiveObject) -> str:
 
 
 class ViewerApp:
-    def __init__(self, scene: LiveScene, port: int = 8080) -> None:
+    def __init__(self, scene: LiveScene, port: int = 8080, offline: bool = False) -> None:
         self.scene = scene
         self.objects = {obj.object_id: obj for obj in scene.objects}
         self.centers = {
@@ -42,7 +50,9 @@ class ViewerApp:
 
         self.server = viser.ViserServer(port=port)
         self.server.scene.set_up_direction("+z")
+        self.offline = offline
         self._add_ground()
+        self._add_splats()
         self.boxes = {obj.object_id: self._add_object(obj) for obj in scene.objects}
 
         # The object at the end of the loaded route.
@@ -59,7 +69,10 @@ class ViewerApp:
         self.pending_reset = False
         self.highlighted: set[str] = set()
         self.shown_id: str | None = None  # the object the panels are showing
+        self.selected: LiveObject | None = None  # the clicked object
+        self.asking = False  # an LLM diagnosis is running
         self._add_gui()
+        self.server.scene.on_click()(self._on_scene_click)
 
     def _add_ground(self) -> None:
         navmap = self.scene.navmap
@@ -80,6 +93,18 @@ class ViewerApp:
             position=(float(middle[0]), float(middle[1]), floor),
         )
 
+    def _add_splats(self) -> None:
+        splats = self.scene.splats
+        if splats is None:
+            return
+        self.server.scene.add_gaussian_splats(
+            "/splats",
+            centers=splats["centers"],
+            covariances=splats["covariances"],
+            rgbs=splats["rgbs"],
+            opacities=splats["opacities"],
+        )
+
     def _add_object(self, obj: LiveObject) -> viser.BoxHandle:
         """Draw one object's box and label. Returns the box, to recolor it later."""
         bbox = obj.detected.bbox
@@ -90,6 +115,7 @@ class ViewerApp:
             dimensions=bbox.extent,
             wxyz=tf.SO3.from_matrix(np.asarray(bbox.rotation)).wxyz,
             position=bbox.center,
+            wireframe=self.scene.splats is not None,  # solid boxes would hide the splats
         )
         self.server.scene.add_label(
             f"/objects/{obj.object_id}/label",
@@ -127,6 +153,12 @@ class ViewerApp:
             self.radius_slider = gui.add_slider(
                 "Highlight radius (m)", min=0.5, max=5.0, step=0.1, initial_value=1.5
             )
+        with gui.add_folder("Selected object"):
+            self.selection_panel = gui.add_markdown("Click a box in the scene to inspect it.")
+            self.crop_image = gui.add_image(np.full((8, 24, 3), 235, np.uint8), visible=False)
+            fly_button = gui.add_button("Fly to object", disabled=True)
+            self.ask_button = gui.add_button("Ask copilot", disabled=True)
+            self.copilot_panel = gui.add_markdown("")
         with gui.add_folder("Nearest object"):
             self.metadata_panel = gui.add_markdown("")
         with gui.add_folder("Diagnosis"):
@@ -136,6 +168,9 @@ class ViewerApp:
         play_button.on_click(self._on_play)
         pause_button.on_click(lambda _: self.player.pause())
         reset_button.on_click(self._on_reset)
+        self.fly_button = fly_button
+        fly_button.on_click(self._on_fly)
+        self.ask_button.on_click(self._on_ask)
 
     def _summary(self) -> str:
         count = len(self.scene.faulty)
@@ -149,6 +184,87 @@ class ViewerApp:
 
     def _on_reset(self, _event: object) -> None:
         self.pending_reset = True
+
+    def _on_scene_click(self, event: viser.SceneClickEvent) -> None:
+        if event.ray_origin is None or event.ray_direction is None:
+            return
+        boxes = {object_id: obj.detected.bbox for object_id, obj in self.objects.items()}
+        object_id = pick_object(
+            np.asarray(event.ray_origin),
+            np.asarray(event.ray_direction),
+            boxes,
+        )
+        if object_id is not None:
+            self.select(object_id)
+
+    def select(self, object_id: str) -> None:
+        """Show one object in the selection panel and color its box."""
+        previous = self.selected
+        self.selected = self.objects[object_id]
+        if previous is not None:
+            self.boxes[previous.object_id].color = self._box_color(previous.object_id)
+        self.boxes[object_id].color = SELECTED_COLOR
+        self.selection_panel.content = format_metadata(self.selected)
+        crop = self.selected.crop
+        self.crop_image.visible = crop is not None
+        if crop is not None:
+            self.crop_image.image = iio.imread(crop)[..., :3]
+        self.fly_button.disabled = False
+        self.ask_button.disabled = self.asking or self.selected.asset is None
+        if not self.asking:
+            self.copilot_panel.content = ""
+
+    def _on_fly(self, event: viser.GuiEvent) -> None:
+        if self.selected is None or event.client is None:
+            return
+        bbox = self.selected.detected.bbox
+        center = np.asarray(bbox.center)
+        distance = max(FLY_MIN_DISTANCE, FLY_EXTENT_FACTOR * float(np.linalg.norm(bbox.extent)))
+        camera = event.client.camera
+        # Keep the current viewing direction, just move closer.
+        away = np.asarray(camera.position) - center
+        away = away / np.linalg.norm(away) if np.linalg.norm(away) > 0 else np.array([0, -1, 0.5])
+        camera.position = tuple(center + away * distance)
+        camera.look_at = tuple(center)
+
+    def _on_ask(self, _event: object) -> None:
+        if self.selected is None or self.selected.asset is None or self.asking:
+            return
+        self.ask_copilot(self.selected)
+
+    def ask_copilot(self, obj: LiveObject) -> threading.Thread:
+        """Run the LLM diagnosis in the background, showing elapsed seconds until it returns."""
+        self.asking = True
+        self.ask_button.disabled = True
+        started = time.time()
+
+        def progress() -> None:
+            while self.asking:
+                elapsed = time.time() - started
+                self.copilot_panel.content = (
+                    f"Asking the copilot about {obj.name}: evidence, model, citation check "
+                    f"({elapsed:.0f} s)"
+                )
+                time.sleep(0.5)
+
+        def work() -> None:
+            try:
+                diagnosis = api.diagnose_fault(obj.object_id, use_llm=True, offline=self.offline)
+                text = format_diagnosis(replace(obj, diagnosis=diagnosis))
+                method = diagnosis.get("method", "")
+                if method:
+                    text += f"\n\n_method: {method}_"
+            except Exception as exc:  # noqa: BLE001 - the panel shows any failure
+                text = f"Copilot failed: {exc}"
+            finally:
+                self.asking = False
+            self.copilot_panel.content = text
+            self.ask_button.disabled = self.selected is None or self.selected.asset is None
+
+        threading.Thread(target=progress, daemon=True).start()
+        worker = threading.Thread(target=work, daemon=True)
+        worker.start()
+        return worker
 
     def navigate(self, label: str) -> None:
         """Start walking the route to the object with this dropdown label."""
@@ -186,15 +302,20 @@ class ViewerApp:
                 f"Back at the start. Press Play to walk to {self.route_target.name}."
             )
 
+    def _box_color(self, object_id: str) -> tuple[int, int, int]:
+        if self.selected is not None and self.selected.object_id == object_id:
+            return SELECTED_COLOR
+        if object_id in self.highlighted:
+            return FAULT_COLOR if self.objects[object_id].is_faulty else HIGHLIGHT_COLOR
+        return BOX_COLOR
+
     def _update_highlights(self, position: np.ndarray) -> None:
         # Only recolor the boxes whose highlight state changed this frame.
         nearby = find_nearby(position, self.centers, self.radius_slider.value)
-        for object_id in nearby - self.highlighted:
-            is_faulty = self.objects[object_id].is_faulty
-            self.boxes[object_id].color = FAULT_COLOR if is_faulty else HIGHLIGHT_COLOR
-        for object_id in self.highlighted - nearby:
-            self.boxes[object_id].color = BOX_COLOR
+        changed = nearby ^ self.highlighted
         self.highlighted = nearby
+        for object_id in changed:
+            self.boxes[object_id].color = self._box_color(object_id)
 
     def _update_panels(self, position: np.ndarray) -> None:
         # Only rewrite the panels when a different object becomes the nearest.

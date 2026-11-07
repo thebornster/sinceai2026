@@ -31,12 +31,18 @@ from typing import Any
 import numpy as np
 from PIL import Image, ImageDraw, ImageFont
 
-from valmet.common.artifacts import OBJECTS_FILE, REPO_ROOT, load_list, save_list
+from valmet.common.artifacts import (
+    CROPS_DIR,
+    OBJECTS_FILE,
+    REPO_ROOT,
+    SEMANTIC_DIR,
+    load_list,
+    save_list,
+)
 from valmet.common.contracts import DetectedObject
 from valmet.preprocessing.export import SCENE_CLEAN_FILE
-from valmet.semantic.segment import DETAILS_FILE, SEGMENT_POINTS_FILE, SEMANTIC_DIR
+from valmet.semantic.segment import DETAILS_FILE, SEGMENT_POINTS_FILE
 
-CROPS_DIR = f"{SEMANTIC_DIR}/crops"
 CACHE_FILE = f"{SEMANTIC_DIR}/label_cache.json"
 RAW_DIR = f"{SEMANTIC_DIR}/label_raw"
 

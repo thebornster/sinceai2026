@@ -6,6 +6,8 @@ from collections.abc import Mapping, Sequence
 
 import numpy as np
 
+from valmet.common.contracts import OrientedBox
+
 
 class PathPlayer:
     """Tracks how far along a list of waypoints the avatar is, at a constant speed."""
@@ -86,3 +88,41 @@ def find_nearby(position: np.ndarray, centers: Mapping[str, np.ndarray], radius:
 def find_nearest(position: np.ndarray, centers: Mapping[str, np.ndarray]) -> str:
     """Id of the object whose center is closest to position."""
     return min(centers, key=lambda object_id: np.linalg.norm(centers[object_id] - position))
+
+
+def ray_box_distance(
+    origin: np.ndarray, direction: np.ndarray, box: OrientedBox
+) -> float | None:
+    """Distance along the ray to where it enters the box, or None if it misses.
+
+    A ray starting inside the box does not count as a hit, so a big box around the
+    camera never hides the objects in front of it.
+    """
+    rotation = np.asarray(box.rotation)
+    o = (np.asarray(origin, dtype=float) - np.asarray(box.center)) @ rotation
+    d = np.asarray(direction, dtype=float) @ rotation
+    d = d / np.linalg.norm(d)
+    half = np.asarray(box.extent) / 2.0
+    with np.errstate(divide="ignore", invalid="ignore"):
+        t1, t2 = (-half - o) / d, (half - o) / d
+    # Axes the ray runs parallel to: inside the slab -> no limit, outside -> miss.
+    parallel = d == 0.0
+    if np.any(parallel & (np.abs(o) > half)):
+        return None
+    near = np.where(parallel, -np.inf, np.minimum(t1, t2)).max()
+    far = np.where(parallel, np.inf, np.maximum(t1, t2)).min()
+    if near > far or near <= 0.0:
+        return None
+    return float(near)
+
+
+def pick_object(
+    origin: np.ndarray, direction: np.ndarray, boxes: Mapping[str, OrientedBox]
+) -> str | None:
+    """Id of the first box the ray enters, or None."""
+    best_id, best_t = None, np.inf
+    for object_id, box in boxes.items():
+        t = ray_box_distance(origin, direction, box)
+        if t is not None and t < best_t:
+            best_id, best_t = object_id, t
+    return best_id

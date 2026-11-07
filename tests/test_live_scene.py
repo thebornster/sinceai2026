@@ -1,9 +1,11 @@
 import shutil
 
+import numpy as np
 import pytest
 
 from valmet.common import NavigationPath
 from valmet.common.artifacts import (
+    CROPS_DIR,
     MANIFEST_FILE,
     MOCK_SCENE_DIR,
     OBJECTS_FILE,
@@ -14,7 +16,11 @@ from valmet.common.artifacts import (
     save_model,
 )
 from valmet.common.contracts import CoordinateSystem, DetectedObject, SceneManifest
-from valmet.integration.live_scene import _shortest_routes, load_live_scene
+from valmet.integration.live_scene import (
+    VIEWER_SPLATS_FILE,
+    _shortest_routes,
+    load_live_scene,
+)
 from valmet.metadata.mapping import METADATA_DIR_ENV
 from valmet.viewer.panels import format_diagnosis, format_metadata
 
@@ -157,3 +163,27 @@ def test_panels_handle_a_missing_confidence_and_a_healthy_object(scene):
     assert "n/a" in format_metadata(unlabeled)
     assert "unclassified" in format_metadata(unlabeled)
     assert "**Likely cause**" not in format_diagnosis(by_id(scene, "obj_0002"))
+
+
+def test_mock_scene_has_no_splats_or_crops(scene):
+    assert scene.splats is None
+    assert all(obj.crop is None for obj in scene.objects)
+
+
+def test_splats_and_crops_are_loaded_when_present(tmp_path):
+    root = copy_mock(tmp_path)
+    np.savez(
+        root / VIEWER_SPLATS_FILE,
+        centers=np.zeros((2, 3), np.float32),
+        covariances=np.zeros((2, 3, 3), np.float32),
+        rgbs=np.ones((2, 3), np.float32),
+        opacities=np.ones((2, 1), np.float32),
+    )
+    (root / CROPS_DIR).mkdir(parents=True)
+    (root / CROPS_DIR / "obj_0001.png").write_bytes(b"png")
+
+    scene = load_live_scene(root, offline=True)
+    assert scene.splats["covariances"].shape == (2, 3, 3)
+    assert by_id(scene, "obj_0001").crop == root / CROPS_DIR / "obj_0001.png"
+    assert by_id(scene, "obj_0002").crop is None
+    assert load_live_scene(root, offline=True, load_splats=False).splats is None

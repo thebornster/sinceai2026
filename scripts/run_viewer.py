@@ -22,10 +22,17 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--scene-dir", type=Path, default=MOCK_SCENE_DIR, help="artifact folder")
     ap.add_argument("--port", type=int, default=8080, help="preferred port")
     ap.add_argument("--offline", action="store_true", help="read equipment data from the snapshot")
+    ap.add_argument(
+        "--no-splats", action="store_true", help="skip the Gaussian splats (for weak GPUs)"
+    )
     args = ap.parse_args(argv)
 
     try:
-        scene = load_live_scene(args.scene_dir, offline=args.offline)
+        scene = load_live_scene(
+            args.scene_dir,
+            offline=args.offline,
+            load_splats=not args.no_splats,
+        )
     except (OSError, ValueError) as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 2
@@ -35,7 +42,7 @@ def main(argv: list[str] | None = None) -> int:
     print(f"{scene.manifest.scene_id}: {len(scene.objects)} objects, {len(scene.faulty)} faulty")
 
     with contextlib.suppress(KeyboardInterrupt):
-        ViewerApp(scene, port=args.port).run()
+        ViewerApp(scene, port=args.port, offline=args.offline).run()
     return 0
 
 
