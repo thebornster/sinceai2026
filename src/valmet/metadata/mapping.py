@@ -69,6 +69,8 @@ LABEL_TO_ASSET_CLASS = {
     "control valve": "CONTROL_VALVE",
     "pressure transmitter": "PRESSURE_TRANSMITTER",
     "pressure sensor": "PRESSURE_TRANSMITTER",
+    "pressure transmitter/gauge": "PRESSURE_TRANSMITTER",
+    "gauge": "PRESSURE_TRANSMITTER",
     "vibration sensor": "VIBRATION_SENSOR",
 }
 
