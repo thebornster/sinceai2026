@@ -271,3 +271,21 @@ def test_target_without_a_route_gets_one_planned_from_the_avatar(app_planning_va
     np.testing.assert_allclose(app.player.waypoints[0][:2], start[:2], atol=0.2)
     run_until_stopped(app)
     assert app.status_panel.content == "Arrived at CV-002 valve (obj_0002)."
+
+
+def test_faulty_only_hides_healthy_objects_but_keeps_selection_and_destination(app):
+    app.show_dropdown.value = "Faulty only"
+    app.apply_visibility()
+    assert app.boxes["obj_0001"].visible and app.labels["obj_0001"].visible  # faulty
+    assert not app.boxes["obj_0003"].visible and not app.labels["obj_0003"].visible
+
+    app.select("obj_0003")
+    assert app.boxes["obj_0003"].visible
+
+    app.labels_checkbox.value = False
+    app.apply_visibility()
+    assert app.boxes["obj_0001"].visible and not app.labels["obj_0001"].visible
+
+    app.show_dropdown.value = "All objects"
+    app.apply_visibility()
+    assert all(box.visible for box in app.boxes.values())

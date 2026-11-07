@@ -207,6 +207,8 @@ the equipment data isn't `healthy`.
   object's route.
 - Each route is walked from its own `start`, so the avatar jumps there first.
 - Gaussian splats from `viewer_splats.npz` are drawn when present (`--no-splats` skips them).
+- "Display" switches to faulty objects only (the selected and walked-to objects stay visible)
+  and turns labels off.
 - Click a box to inspect it: metadata, the semantic crop, "Fly to object" and "Ask copilot", which
   runs `diagnose_fault(use_llm=True)` in the background.
 - Device data comes from `valmet.api`, so the viewer ignores `asset_mapping.json` in the scene

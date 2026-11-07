@@ -32,6 +32,8 @@ SELECTED_COLOR = (255, 0, 255)  # the clicked box
 ROUTE_COLOR = (40, 120, 255)
 ROUTE_LIFT = 0.02  # keeps the route line just above the floor grid
 FRAME_TIME = 1.0 / 30.0  # seconds between updates (30 per second)
+SHOW_ALL = "All objects"
+SHOW_FAULTY = "Faulty only"
 FLY_MIN_DISTANCE = 1.2  # meters from the camera to a small object after "Fly to"
 FLY_EXTENT_FACTOR = 2.0  # camera distance per meter of box diagonal
 
@@ -56,6 +58,7 @@ class ViewerApp:
         self.offline = offline
         self._add_ground()
         self._add_splats()
+        self.labels: dict[str, viser.LabelHandle] = {}
         self.boxes = {obj.object_id: self._add_object(obj) for obj in scene.objects}
 
         # The object at the end of the loaded route.
@@ -120,7 +123,7 @@ class ViewerApp:
             position=bbox.center,
             wireframe=self.scene.splats is not None,  # solid boxes would hide the splats
         )
-        self.server.scene.add_label(
+        self.labels[obj.object_id] = self.server.scene.add_label(
             f"/objects/{obj.object_id}/label",
             target_label(obj),
             position=(x, y, z + bbox.extent[2] / 2 + 0.15),
@@ -146,6 +149,9 @@ class ViewerApp:
             self.target_dropdown = gui.add_dropdown("Object", tuple(self.targets))
             navigate_button = gui.add_button("Navigate to object")
             self.status_panel = gui.add_markdown(self._summary())
+        with gui.add_folder("Display"):
+            self.show_dropdown = gui.add_dropdown("Show", (SHOW_ALL, SHOW_FAULTY))
+            self.labels_checkbox = gui.add_checkbox("Show labels", initial_value=True)
         with gui.add_folder("Playback"):
             play_button = gui.add_button("Play")
             pause_button = gui.add_button("Pause")
@@ -172,6 +178,8 @@ class ViewerApp:
         pause_button.on_click(lambda _: self.player.pause())
         reset_button.on_click(self._on_reset)
         self.fly_button = fly_button
+        self.show_dropdown.on_update(lambda _: self.apply_visibility())
+        self.labels_checkbox.on_update(lambda _: self.apply_visibility())
         fly_button.on_click(self._on_fly)
         self.ask_button.on_click(self._on_ask)
 
@@ -188,10 +196,26 @@ class ViewerApp:
     def _on_reset(self, _event: object) -> None:
         self.pending_reset = True
 
+    def is_shown(self, obj: LiveObject) -> bool:
+        """Faulty-only mode still shows the selected object and the one being walked to."""
+        if self.show_dropdown.value == SHOW_ALL or obj.is_faulty:
+            return True
+        return obj in (self.selected, self.destination, self.route_target)
+
+    def apply_visibility(self) -> None:
+        for object_id, obj in self.objects.items():
+            shown = self.is_shown(obj)
+            self.boxes[object_id].visible = shown
+            self.labels[object_id].visible = shown and self.labels_checkbox.value
+
     def _on_scene_click(self, event: viser.SceneClickEvent) -> None:
         if event.ray_origin is None or event.ray_direction is None:
             return
-        boxes = {object_id: obj.detected.bbox for object_id, obj in self.objects.items()}
+        boxes = {
+            object_id: obj.detected.bbox
+            for object_id, obj in self.objects.items()
+            if self.boxes[object_id].visible
+        }
         object_id = pick_object(
             np.asarray(event.ray_origin),
             np.asarray(event.ray_direction),
@@ -213,6 +237,7 @@ class ViewerApp:
         if crop is not None:
             self.crop_image.image = iio.imread(crop)[..., :3]
         self.fly_button.disabled = False
+        self.apply_visibility()
         self.ask_button.disabled = self.asking or self.selected.asset is None
         if not self.asking:
             self.copilot_panel.content = ""
@@ -300,6 +325,7 @@ class ViewerApp:
         self.player.play()
         self.route_target = obj
         self.destination = obj
+        self.apply_visibility()
         self.status_panel.content = f"Walking to {obj.name}."
 
     def play(self, label: str) -> None:
