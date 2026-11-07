@@ -15,9 +15,17 @@ import numpy as np
 
 from valmet import api
 from valmet.common import DetectedObject, NavigationMapMetadata, NavigationPath, SceneManifest
-from valmet.common.artifacts import CROPS_DIR, MOCK_SCENE_DIR, SceneArtifacts
+from valmet.common.artifacts import (
+    CROPS_DIR,
+    MOCK_SCENE_DIR,
+    SEGMENT_POINTS_FILE,
+    SceneArtifacts,
+)
 
 VIEWER_SPLATS_FILE = "viewer_splats.npz"  # written by valmet.preprocessing.export
+OBSTACLES_FILE = "obstacles.npy"  # written by valmet.spatial.occupancy
+SCENE_CLEAN_FILE = "scene_clean.npz"  # written by valmet.preprocessing.export
+STRUCTURE = -2  # segment label of walls, floor and ceiling
 
 HEALTHY_STATE = "healthy"
 
@@ -55,6 +63,13 @@ class LiveScene:
     navmap: NavigationMapMetadata | None = None
     # viser add_gaussian_splats arrays (centers, covariances, rgbs, opacities); None = not loaded
     splats: dict[str, np.ndarray] | None = None
+    # occupancy grid and uninflated obstacle mask, for routes paths.json does not have
+    grid: np.ndarray | None = None
+    obstacles: np.ndarray | None = None
+    # cleaned Gaussians for click picking, labelled with their index into `objects`, or
+    # STRUCTURE for walls/floor/ceiling (they block clicks but are never picked)
+    pick_points: np.ndarray | None = None
+    pick_labels: np.ndarray | None = None
 
     @property
     def faulty(self) -> list[LiveObject]:
@@ -89,6 +104,21 @@ def _load_splats(root: Path) -> dict[str, np.ndarray] | None:
         return {key: data[key] for key in ("centers", "covariances", "rgbs", "opacities")}
 
 
+def _load_pick_points(root: Path, n_objects: int) -> tuple[np.ndarray | None, np.ndarray | None]:
+    """Objects and structure; noise (floaters) and labels of objects no longer there dropped."""
+    segment, clean = Path(root) / SEGMENT_POINTS_FILE, Path(root) / SCENE_CLEAN_FILE
+    if not segment.exists() or not clean.exists():
+        return None, None
+    with np.load(segment) as data:
+        labels = data["gaussian_labels"]
+    with np.load(clean) as data:
+        positions = data["positions"]
+    if len(labels) != len(positions):  # scene re-preprocessed since segmentation
+        return None, None
+    keep = (labels == STRUCTURE) | ((labels >= 0) & (labels < n_objects))
+    return positions[keep], labels[keep]
+
+
 def load_live_scene(
     root: Path = MOCK_SCENE_DIR, offline: bool = False, load_splats: bool = True
 ) -> LiveScene:
@@ -118,4 +148,19 @@ def load_live_scene(
             )
         )
     splats = _load_splats(root) if load_splats else None
-    return LiveScene(artifacts.manifest, objects, artifacts.navmap, splats)
+    grid = obstacles = None
+    if artifacts.navmap is not None:
+        grid = artifacts.load_occupancy()
+        if (Path(root) / OBSTACLES_FILE).exists():
+            obstacles = np.load(Path(root) / OBSTACLES_FILE)
+    pick_points, pick_labels = _load_pick_points(root, len(objects))
+    return LiveScene(
+        artifacts.manifest,
+        objects,
+        artifacts.navmap,
+        splats,
+        grid,
+        obstacles,
+        pick_points,
+        pick_labels,
+    )

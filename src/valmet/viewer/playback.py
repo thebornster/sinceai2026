@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
+from typing import NamedTuple
 
 import numpy as np
 
@@ -90,9 +91,7 @@ def find_nearest(position: np.ndarray, centers: Mapping[str, np.ndarray]) -> str
     return min(centers, key=lambda object_id: np.linalg.norm(centers[object_id] - position))
 
 
-def ray_box_distance(
-    origin: np.ndarray, direction: np.ndarray, box: OrientedBox
-) -> float | None:
+def ray_box_distance(origin: np.ndarray, direction: np.ndarray, box: OrientedBox) -> float | None:
     """Distance along the ray to where it enters the box, or None if it misses.
 
     A ray starting inside the box does not count as a hit, so a big box around the
@@ -126,3 +125,49 @@ def pick_object(
         if t is not None and t < best_t:
             best_id, best_t = object_id, t
     return best_id
+
+
+class RayPick(NamedTuple):
+    objects: list[int]  # object indices along the ray, front to back; [0] is under the cursor
+    point: np.ndarray | None  # where the ray meets the picked object
+
+
+def pick_along_ray(
+    origin: np.ndarray,
+    direction: np.ndarray,
+    points: np.ndarray,
+    labels: np.ndarray,
+    transparent: np.ndarray,
+    angle: float = 0.008,
+    min_radius: float = 0.01,
+    surface_depth: float = 0.08,
+) -> RayPick:
+    """What a click ray hits in a labelled point cloud.
+
+    labels: object index per point, or negative for structure (walls, floor), which blocks
+    the ray but is never picked. transparent[k]: object k is hidden and ignored. Points count
+    when within `angle` radians of the ray (`min_radius` meters up close). The first surface is
+    the nearest such point plus `surface_depth`; on it the object closest to the ray wins, so
+    aim beats depth. A surface of only structure picks nothing.
+    """
+    d = np.asarray(direction, dtype=float)
+    d = d / np.linalg.norm(d)
+    keep = (labels < 0) | ~transparent[np.maximum(labels, 0)]
+    pts, lab = points[keep], labels[keep]
+    v = pts - np.asarray(origin, dtype=float)
+    t = v @ d
+    miss = np.linalg.norm(v - np.outer(t, d), axis=1)
+    near = (t > 0.05) & (miss < np.maximum(angle * t, min_radius))
+    if not near.any():
+        return RayPick([], None)
+    t, miss, lab, pts = t[near], miss[near], lab[near], pts[near]
+    surface = (t < t.min() + surface_depth) & (lab >= 0)
+    if not surface.any():
+        return RayPick([], None)
+    best = np.flatnonzero(surface)[np.argmin((miss / t)[surface])]
+    first = int(lab[best])
+    objects = lab >= 0
+    by_depth = lab[objects][np.argsort(t[objects], kind="stable")]
+    ids, first_seen = np.unique(by_depth, return_index=True)
+    behind = [int(k) for k in ids[np.argsort(first_seen)] if k != first]
+    return RayPick([first, *behind], pts[best])

@@ -44,3 +44,41 @@ def test_outputs_follow_the_contracts(segmented_scene):
         assert len(members) == o.gaussians.count > 0
         assert np.all(members >= 1000)
     assert (root / OBJECTS_FILE).exists()
+
+
+def test_tilted_noisy_floor_is_removed_and_debris_dropped():
+    from valmet.semantic.segment import (
+        SegmentParams,
+        filter_floor_debris,
+        floor_height,
+        remove_planes,
+    )
+
+    rng = np.random.default_rng(0)
+    sp = SegmentParams()
+    xy = rng.uniform(-3, 3, (60_000, 2))
+    z = 0.01 * xy[:, 0]  # 6 cm rise across the room
+    xyz = np.column_stack([xy, z + rng.normal(0, 0.005, len(z))])
+    normals = np.tile([0.0, 0.0, 1.0], (len(xyz), 1))
+    noisy = rng.random(len(xyz)) < 0.2
+    normals[noisy] = [0.8, 0.0, 0.6]  # normal estimate off on 20 % of the floor
+
+    floor_z = floor_height(xyz, normals, sp)
+    assert np.abs(floor_z - z).max() < 0.02
+    planes = [{"name": "floor", "label": "floor", "axis": 2, "value": 0.0}]
+    remaining = remove_planes(
+        xyz=xyz,
+        normals=normals,
+        planes=planes,
+        floor_z=floor_z,
+        sp=sp,
+    )
+    assert remaining.mean() < 0.01
+
+    objs = [
+        {"idx": np.arange(10), "tags": []},  # floor-level speckle
+        {"idx": np.arange(10, 20), "tags": []},
+    ]
+    xyz[10:20, 2] += 0.5  # something standing on the floor
+    kept = filter_floor_debris(objs, xyz, floor_z, sp)
+    assert [o["idx"][0] for o in kept] == [10]

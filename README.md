@@ -200,12 +200,19 @@ the equipment data isn't `healthy`.
 
 - `integration/live_scene.py` joins scene artifacts with `valmet.api` once at startup. It's the
   only viewer code that touches other modules.
-- Routes come only from `paths.json`, matched on `target_object_id`. The shortest one is used if an
-  object has several. Objects with no route show a message instead of moving.
+- Routes come from `paths.json`, matched on `target_object_id`. The shortest one is used if an
+  object has several. Objects with no route there get one planned on the navmap from where the
+  avatar stands; without a navmap (or if unreachable) a message is shown instead.
 - Play continues the current walk if its object is still selected. Otherwise it starts the selected
   object's route.
 - Each route is walked from its own `start`, so the avatar jumps there first.
 - Gaussian splats from `viewer_splats.npz` are drawn when present (`--no-splats` skips them).
+- "Display" switches to faulty objects only (the selected and walked-to objects stay visible).
+  Text labels are off except for the selected object; "Show labels" turns them all on.
+- Clicks pick the object under the cursor from its segmented Gaussians (boxes when there are
+  none); walls block the click and a dot marks where it landed. Click the same spot again to
+  select the object behind. The selection gets a translucent fill, and "Only show selected" hides
+  everything else.
 - Click a box to inspect it: metadata, the semantic crop, "Fly to object" and "Ask copilot", which
   runs `diagnose_fault(use_llm=True)` in the background.
 - Device data comes from `valmet.api`, so the viewer ignores `asset_mapping.json` in the scene

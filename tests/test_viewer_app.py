@@ -33,14 +33,28 @@ def app(monkeypatch):
     viewer.server.stop()
 
 
-@pytest.fixture
-def app_without_valve_route(monkeypatch):
-    monkeypatch.delenv(METADATA_DIR_ENV, raising=False)
-    scene = load_live_scene(offline=True)
+def _without_valve_route(scene):
     objects = [
         replace(obj, route=None) if obj.object_id == "obj_0002" else obj for obj in scene.objects
     ]
-    viewer = ViewerApp(replace(scene, objects=objects), port=free_port())
+    return replace(scene, objects=objects)
+
+
+@pytest.fixture
+def app_without_valve_route(monkeypatch):
+    """No paths.json route to the valve and no navmap to plan one."""
+    monkeypatch.delenv(METADATA_DIR_ENV, raising=False)
+    scene = replace(_without_valve_route(load_live_scene(offline=True)), navmap=None, grid=None)
+    viewer = ViewerApp(scene, port=free_port())
+    yield viewer
+    viewer.server.stop()
+
+
+@pytest.fixture
+def app_planning_valve_route(monkeypatch):
+    """No paths.json route to the valve, but a navmap to plan one."""
+    monkeypatch.delenv(METADATA_DIR_ENV, raising=False)
+    viewer = ViewerApp(_without_valve_route(load_live_scene(offline=True)), port=free_port())
     yield viewer
     viewer.server.stop()
 
@@ -245,3 +259,84 @@ def test_ask_copilot_fills_the_panel_without_blocking(app):
     assert not app.asking
     assert "CAVITATION_RISK" in app.copilot_panel.content
     assert "method:" in app.copilot_panel.content
+
+
+def test_target_without_a_route_gets_one_planned_from_the_avatar(app_planning_valve_route):
+    app = app_planning_valve_route
+    start = app.player.position()
+    app.pending_target = label_of(app, "obj_0002")
+    app.tick(0.1)
+    assert app.player.playing
+    assert app.status_panel.content == "Walking to CV-002 valve (obj_0002)."
+    np.testing.assert_allclose(app.player.waypoints[0][:2], start[:2], atol=0.2)
+    run_until_stopped(app)
+    assert app.status_panel.content == "Arrived at CV-002 valve (obj_0002)."
+
+
+def test_labels_are_off_except_for_the_selection(app):
+    assert not any(label.visible for label in app.labels.values())
+    app.select("obj_0002")
+    assert [i for i, label in app.labels.items() if label.visible] == ["obj_0002"]
+
+
+def test_faulty_only_hides_healthy_objects_but_keeps_selection_and_destination(app):
+    app.labels_checkbox.value = True
+    app.show_dropdown.value = "Faulty only"
+    app.apply_visibility()
+    assert app.boxes["obj_0001"].visible and app.labels["obj_0001"].visible  # faulty
+    assert not app.boxes["obj_0003"].visible and not app.labels["obj_0003"].visible
+
+    app.select("obj_0003")
+    assert app.boxes["obj_0003"].visible
+
+    app.labels_checkbox.value = False
+    app.apply_visibility()
+    assert app.boxes["obj_0001"].visible and not app.labels["obj_0001"].visible
+
+    app.show_dropdown.value = "All objects"
+    app.apply_visibility()
+    assert all(box.visible for box in app.boxes.values())
+
+
+def test_selection_is_filled_and_can_be_shown_alone(app):
+    app.select("obj_0002")
+    assert app.labels["obj_0002"].visible  # the selected label stays on
+    assert not app.labels["obj_0001"].visible
+    app.isolate_checkbox.value = True
+    app.apply_visibility()
+    assert [i for i, box in app.boxes.items() if box.visible] == ["obj_0002"]
+
+
+def test_click_picks_the_visible_box_along_the_ray(app):
+    center = np.asarray(app.objects["obj_0002"].detected.bbox.center)
+    origin = center + np.array([0.0, 0.0, 20.0])
+    assert app.pick(origin, np.array([0.0, 0.0, -1.0])) == "obj_0002"
+    app.show_dropdown.value = "Faulty only"
+    app.apply_visibility()
+    assert app.pick(origin, np.array([0.0, 0.0, -1.0])) != "obj_0002"
+
+
+def test_click_uses_segment_points_over_boxes(monkeypatch):
+    monkeypatch.delenv(METADATA_DIR_ENV, raising=False)
+    scene = load_live_scene(offline=True)
+    center = np.asarray(scene.objects[1].detected.center)  # obj_0002
+    # One point of obj_0003 placed in front of obj_0002 along the ray: points decide, not boxes.
+    points = np.array([center, center + (0.0, 0.0, 5.0)], np.float32)
+    viewer = ViewerApp(
+        replace(scene, pick_points=points, pick_labels=np.array([1, 2])),
+        port=free_port(),
+    )
+    try:
+        origin = center + np.array([0.0, 0.0, 20.0])
+        down = np.array([0.0, 0.0, -1.0])
+        assert viewer.pick(origin, down) == "obj_0003"
+        viewer.click(origin, down)
+        assert viewer.selected.object_id == "obj_0003"
+        viewer.click(origin, down)  # same spot again: the object behind
+        assert viewer.selected.object_id == "obj_0002"
+        viewer.click(origin, down)  # and around
+        assert viewer.selected.object_id == "obj_0003"
+        viewer.boxes["obj_0003"].visible = False
+        assert viewer.pick(origin, down) == "obj_0002"
+    finally:
+        viewer.server.stop()

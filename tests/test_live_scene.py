@@ -10,6 +10,7 @@ from valmet.common.artifacts import (
     MOCK_SCENE_DIR,
     OBJECTS_FILE,
     PATHS_FILE,
+    SEGMENT_POINTS_FILE,
     load_list,
     load_model,
     save_list,
@@ -17,6 +18,7 @@ from valmet.common.artifacts import (
 )
 from valmet.common.contracts import CoordinateSystem, DetectedObject, SceneManifest
 from valmet.integration.live_scene import (
+    SCENE_CLEAN_FILE,
     VIEWER_SPLATS_FILE,
     _shortest_routes,
     load_live_scene,
@@ -187,3 +189,19 @@ def test_splats_and_crops_are_loaded_when_present(tmp_path):
     assert by_id(scene, "obj_0001").crop == root / CROPS_DIR / "obj_0001.png"
     assert by_id(scene, "obj_0002").crop is None
     assert load_live_scene(root, offline=True, load_splats=False).splats is None
+
+
+def test_pick_points_keep_objects_and_structure(tmp_path):
+    root = copy_mock(tmp_path)
+    (root / SEGMENT_POINTS_FILE).parent.mkdir(parents=True)
+    np.savez(
+        root / SEGMENT_POINTS_FILE,
+        gaussian_labels=np.array([0, -1, 2, -2, 7]),  # 7: stale, beyond the 3 objects
+    )
+    positions = np.arange(15, dtype=np.float32).reshape(5, 3)
+    np.savez(root / SCENE_CLEAN_FILE, positions=positions)
+    scene = load_live_scene(root, offline=True)
+    np.testing.assert_array_equal(scene.pick_labels, [0, 2, -2])
+    np.testing.assert_array_equal(scene.pick_points, positions[[0, 2, 3]])
+    np.savez(root / SCENE_CLEAN_FILE, positions=positions[:4])  # re-preprocessed since
+    assert load_live_scene(root, offline=True).pick_points is None

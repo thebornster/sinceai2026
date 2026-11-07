@@ -1,7 +1,8 @@
 """The Viser app: boxes, routes, the walking avatar and the side panels.
 
 Pick an object, press Navigate, and the avatar walks that object's route from
-paths.json. Routes are computed by the spatial pipeline; the viewer only plays them.
+paths.json. Objects without one get a route planned on the navmap from where the avatar
+stands.
 Click a box to inspect it, fly the camera to it, or ask the LLM copilot for a diagnosis.
 """
 
@@ -17,10 +18,18 @@ import viser
 import viser.transforms as tf
 
 from valmet import api
+from valmet.common.contracts import NavigationPath
 from valmet.integration.live_scene import LiveObject, LiveScene
+from valmet.spatial.planner import UnreachableTargetError, plan_path
 from valmet.viewer.avatar import Person
 from valmet.viewer.panels import format_diagnosis, format_metadata
-from valmet.viewer.playback import PathPlayer, find_nearby, find_nearest, pick_object
+from valmet.viewer.playback import (
+    PathPlayer,
+    find_nearby,
+    find_nearest,
+    pick_along_ray,
+    pick_object,
+)
 
 BOX_COLOR = (120, 144, 170)
 HIGHLIGHT_COLOR = (60, 220, 120)  # boxes close to the avatar
@@ -29,6 +38,11 @@ SELECTED_COLOR = (255, 0, 255)  # the clicked box
 ROUTE_COLOR = (40, 120, 255)
 ROUTE_LIFT = 0.02  # keeps the route line just above the floor grid
 FRAME_TIME = 1.0 / 30.0  # seconds between updates (30 per second)
+SELECTED_FILL_OPACITY = 0.35
+SAME_SPOT_COS = np.cos(np.radians(0.5))  # a click this close to the last one goes deeper
+HIT_MARKER_RADIUS = 0.02
+SHOW_ALL = "All objects"
+SHOW_FAULTY = "Faulty only"
 FLY_MIN_DISTANCE = 1.2  # meters from the camera to a small object after "Fly to"
 FLY_EXTENT_FACTOR = 2.0  # camera distance per meter of box diagonal
 
@@ -53,6 +67,7 @@ class ViewerApp:
         self.offline = offline
         self._add_ground()
         self._add_splats()
+        self.labels: dict[str, viser.LabelHandle] = {}
         self.boxes = {obj.object_id: self._add_object(obj) for obj in scene.objects}
 
         # The object at the end of the loaded route.
@@ -70,6 +85,7 @@ class ViewerApp:
         self.highlighted: set[str] = set()
         self.shown_id: str | None = None  # the object the panels are showing
         self.selected: LiveObject | None = None  # the clicked object
+        self.last_click: tuple[np.ndarray, np.ndarray] | None = None  # ray origin, direction
         self.asking = False  # an LLM diagnosis is running
         self._add_gui()
         self.server.scene.on_click()(self._on_scene_click)
@@ -117,11 +133,12 @@ class ViewerApp:
             position=bbox.center,
             wireframe=self.scene.splats is not None,  # solid boxes would hide the splats
         )
-        self.server.scene.add_label(
+        self.labels[obj.object_id] = self.server.scene.add_label(
             f"/objects/{obj.object_id}/label",
             target_label(obj),
             position=(x, y, z + bbox.extent[2] / 2 + 0.15),
             anchor="bottom-center",
+            visible=False,  # only the selected object's label, unless "Show labels" is on
         )
         return box
 
@@ -143,6 +160,10 @@ class ViewerApp:
             self.target_dropdown = gui.add_dropdown("Object", tuple(self.targets))
             navigate_button = gui.add_button("Navigate to object")
             self.status_panel = gui.add_markdown(self._summary())
+        with gui.add_folder("Display"):
+            self.show_dropdown = gui.add_dropdown("Show", (SHOW_ALL, SHOW_FAULTY))
+            self.labels_checkbox = gui.add_checkbox("Show labels", initial_value=False)
+            self.isolate_checkbox = gui.add_checkbox("Only show selected", initial_value=False)
         with gui.add_folder("Playback"):
             play_button = gui.add_button("Play")
             pause_button = gui.add_button("Pause")
@@ -169,6 +190,9 @@ class ViewerApp:
         pause_button.on_click(lambda _: self.player.pause())
         reset_button.on_click(self._on_reset)
         self.fly_button = fly_button
+        self.show_dropdown.on_update(lambda _: self.apply_visibility())
+        self.labels_checkbox.on_update(lambda _: self.apply_visibility())
+        self.isolate_checkbox.on_update(lambda _: self.apply_visibility())
         fly_button.on_click(self._on_fly)
         self.ask_button.on_click(self._on_ask)
 
@@ -185,17 +209,86 @@ class ViewerApp:
     def _on_reset(self, _event: object) -> None:
         self.pending_reset = True
 
+    def is_shown(self, obj: LiveObject) -> bool:
+        """Faulty-only mode still shows the selected object and the one being walked to."""
+        if self.isolate_checkbox.value and self.selected is not None:
+            return obj is self.selected
+        if self.show_dropdown.value == SHOW_ALL or obj.is_faulty:
+            return True
+        return obj in (self.selected, self.destination, self.route_target)
+
+    def apply_visibility(self) -> None:
+        for object_id, obj in self.objects.items():
+            shown = self.is_shown(obj)
+            self.boxes[object_id].visible = shown
+            is_selected = obj is self.selected
+            self.labels[object_id].visible = shown and (self.labels_checkbox.value or is_selected)
+
     def _on_scene_click(self, event: viser.SceneClickEvent) -> None:
         if event.ray_origin is None or event.ray_direction is None:
             return
-        boxes = {object_id: obj.detected.bbox for object_id, obj in self.objects.items()}
-        object_id = pick_object(
-            np.asarray(event.ray_origin),
-            np.asarray(event.ray_direction),
-            boxes,
+        self.click(np.asarray(event.ray_origin), np.asarray(event.ray_direction))
+
+    def click(self, origin: np.ndarray, direction: np.ndarray) -> None:
+        """Select the object under the click; clicking the same spot again selects the next
+        object behind it."""
+        origin = np.asarray(origin, dtype=float)
+        direction = np.asarray(direction, dtype=float) / np.linalg.norm(direction)
+        previous, self.last_click = self.last_click, (origin, direction)
+        hits, point = self.hits(origin, direction)
+        if not hits:
+            return
+        object_id = hits[0]
+        same_spot = (
+            previous is not None
+            and np.allclose(previous[0], origin, atol=1e-3)
+            and float(previous[1] @ direction) > SAME_SPOT_COS
         )
-        if object_id is not None:
-            self.select(object_id)
+        if same_spot and self.selected is not None and self.selected.object_id in hits:
+            object_id = hits[(hits.index(self.selected.object_id) + 1) % len(hits)]
+        self.select(object_id)
+        if point is not None:
+            self.server.scene.add_icosphere(
+                "/selection_hit",
+                radius=HIT_MARKER_RADIUS,
+                color=SELECTED_COLOR,
+                position=tuple(float(v) for v in point),
+            )
+        if len(hits) > 1:
+            self.selection_panel.content += (
+                "\n\n*Click again on the same spot to select the object behind.*"
+            )
+
+    def pick(self, origin: np.ndarray, direction: np.ndarray) -> str | None:
+        """The visible object under the click, or None."""
+        hits, _ = self.hits(origin, direction)
+        return hits[0] if hits else None
+
+    def hits(
+        self, origin: np.ndarray, direction: np.ndarray
+    ) -> tuple[list[str], np.ndarray | None]:
+        """Visible objects along the click ray, front to back, and where the first is hit.
+
+        Uses the segmented Gaussians when the scene has them (walls block the ray, a big box
+        in front can't steal the click), else the first box entered."""
+        scene = self.scene
+        visible = np.array([self.boxes[obj.object_id].visible for obj in scene.objects])
+        if scene.pick_points is not None:
+            ray = pick_along_ray(
+                origin=origin,
+                direction=direction,
+                points=scene.pick_points,
+                labels=scene.pick_labels,
+                transparent=~visible,
+            )
+            return [scene.objects[k].object_id for k in ray.objects], ray.point
+        boxes = {
+            obj.object_id: obj.detected.bbox
+            for obj, shown in zip(scene.objects, visible, strict=True)
+            if shown
+        }
+        object_id = pick_object(origin, direction, boxes)
+        return ([object_id] if object_id is not None else []), None
 
     def select(self, object_id: str) -> None:
         """Show one object in the selection panel and color its box."""
@@ -204,12 +297,22 @@ class ViewerApp:
         if previous is not None:
             self.boxes[previous.object_id].color = self._box_color(previous.object_id)
         self.boxes[object_id].color = SELECTED_COLOR
+        bbox = self.selected.detected.bbox
+        self.server.scene.add_box(
+            "/selection",
+            color=SELECTED_COLOR,
+            dimensions=bbox.extent,
+            wxyz=tf.SO3.from_matrix(np.asarray(bbox.rotation)).wxyz,
+            position=bbox.center,
+            opacity=SELECTED_FILL_OPACITY,
+        )
         self.selection_panel.content = format_metadata(self.selected)
         crop = self.selected.crop
         self.crop_image.visible = crop is not None
         if crop is not None:
             self.crop_image.image = iio.imread(crop)[..., :3]
         self.fly_button.disabled = False
+        self.apply_visibility()
         self.ask_button.disabled = self.asking or self.selected.asset is None
         if not self.asking:
             self.copilot_panel.content = ""
@@ -266,19 +369,38 @@ class ViewerApp:
         worker.start()
         return worker
 
+    def _plan_route(self, obj: LiveObject) -> NavigationPath | str:
+        """Route from the avatar's position on the navmap, or why there is none."""
+        scene = self.scene
+        if scene.navmap is None or scene.grid is None:
+            return f"No route to {obj.name} in paths.json and no navmap to plan one."
+        try:
+            return plan_path(
+                navmap=scene.navmap,
+                grid=scene.grid,
+                target_box=obj.detected.bbox,
+                target_object_id=obj.object_id,
+                start_xy=tuple(self.player.position()[:2]),
+                obstacles=scene.obstacles,
+            )
+        except UnreachableTargetError as exc:
+            return f"Can't reach {obj.name}: {exc}"
+
     def navigate(self, label: str) -> None:
         """Start walking the route to the object with this dropdown label."""
         obj = self.targets[label]
-        if obj.route is None:
+        route = obj.route or self._plan_route(obj)
+        if isinstance(route, str):
             self.player.pause()
             self.destination = None
-            self.status_panel.content = f"No route to {obj.name} in paths.json yet."
+            self.status_panel.content = route
             return
-        self.player.load(obj.route.waypoints)
-        self._draw_route(obj.route.waypoints)
+        self.player.load(route.waypoints)
+        self._draw_route(route.waypoints)
         self.player.play()
         self.route_target = obj
         self.destination = obj
+        self.apply_visibility()
         self.status_panel.content = f"Walking to {obj.name}."
 
     def play(self, label: str) -> None:
