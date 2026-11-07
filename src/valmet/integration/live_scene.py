@@ -18,6 +18,7 @@ from valmet.common import DetectedObject, NavigationMapMetadata, NavigationPath,
 from valmet.common.artifacts import CROPS_DIR, MOCK_SCENE_DIR, SceneArtifacts
 
 VIEWER_SPLATS_FILE = "viewer_splats.npz"  # written by valmet.preprocessing.export
+OBSTACLES_FILE = "obstacles.npy"  # written by valmet.spatial.occupancy
 
 HEALTHY_STATE = "healthy"
 
@@ -55,6 +56,9 @@ class LiveScene:
     navmap: NavigationMapMetadata | None = None
     # viser add_gaussian_splats arrays (centers, covariances, rgbs, opacities); None = not loaded
     splats: dict[str, np.ndarray] | None = None
+    # occupancy grid and uninflated obstacle mask, for routes paths.json does not have
+    grid: np.ndarray | None = None
+    obstacles: np.ndarray | None = None
 
     @property
     def faulty(self) -> list[LiveObject]:
@@ -118,4 +122,9 @@ def load_live_scene(
             )
         )
     splats = _load_splats(root) if load_splats else None
-    return LiveScene(artifacts.manifest, objects, artifacts.navmap, splats)
+    grid = obstacles = None
+    if artifacts.navmap is not None:
+        grid = artifacts.load_occupancy()
+        if (Path(root) / OBSTACLES_FILE).exists():
+            obstacles = np.load(Path(root) / OBSTACLES_FILE)
+    return LiveScene(artifacts.manifest, objects, artifacts.navmap, splats, grid, obstacles)

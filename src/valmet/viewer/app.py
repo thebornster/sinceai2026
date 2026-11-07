@@ -1,7 +1,8 @@
 """The Viser app: boxes, routes, the walking avatar and the side panels.
 
 Pick an object, press Navigate, and the avatar walks that object's route from
-paths.json. Routes are computed by the spatial pipeline; the viewer only plays them.
+paths.json. Objects without one get a route planned on the navmap from where the avatar
+stands.
 Click a box to inspect it, fly the camera to it, or ask the LLM copilot for a diagnosis.
 """
 
@@ -17,7 +18,9 @@ import viser
 import viser.transforms as tf
 
 from valmet import api
+from valmet.common.contracts import NavigationPath
 from valmet.integration.live_scene import LiveObject, LiveScene
+from valmet.spatial.planner import UnreachableTargetError, plan_path
 from valmet.viewer.avatar import Person
 from valmet.viewer.panels import format_diagnosis, format_metadata
 from valmet.viewer.playback import PathPlayer, find_nearby, find_nearest, pick_object
@@ -266,16 +269,34 @@ class ViewerApp:
         worker.start()
         return worker
 
+    def _plan_route(self, obj: LiveObject) -> NavigationPath | str:
+        """Route from the avatar's position on the navmap, or why there is none."""
+        scene = self.scene
+        if scene.navmap is None or scene.grid is None:
+            return f"No route to {obj.name} in paths.json and no navmap to plan one."
+        try:
+            return plan_path(
+                navmap=scene.navmap,
+                grid=scene.grid,
+                target_box=obj.detected.bbox,
+                target_object_id=obj.object_id,
+                start_xy=tuple(self.player.position()[:2]),
+                obstacles=scene.obstacles,
+            )
+        except UnreachableTargetError as exc:
+            return f"Can't reach {obj.name}: {exc}"
+
     def navigate(self, label: str) -> None:
         """Start walking the route to the object with this dropdown label."""
         obj = self.targets[label]
-        if obj.route is None:
+        route = obj.route or self._plan_route(obj)
+        if isinstance(route, str):
             self.player.pause()
             self.destination = None
-            self.status_panel.content = f"No route to {obj.name} in paths.json yet."
+            self.status_panel.content = route
             return
-        self.player.load(obj.route.waypoints)
-        self._draw_route(obj.route.waypoints)
+        self.player.load(route.waypoints)
+        self._draw_route(route.waypoints)
         self.player.play()
         self.route_target = obj
         self.destination = obj

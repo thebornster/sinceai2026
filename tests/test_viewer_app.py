@@ -33,14 +33,28 @@ def app(monkeypatch):
     viewer.server.stop()
 
 
-@pytest.fixture
-def app_without_valve_route(monkeypatch):
-    monkeypatch.delenv(METADATA_DIR_ENV, raising=False)
-    scene = load_live_scene(offline=True)
+def _without_valve_route(scene):
     objects = [
         replace(obj, route=None) if obj.object_id == "obj_0002" else obj for obj in scene.objects
     ]
-    viewer = ViewerApp(replace(scene, objects=objects), port=free_port())
+    return replace(scene, objects=objects)
+
+
+@pytest.fixture
+def app_without_valve_route(monkeypatch):
+    """No paths.json route to the valve and no navmap to plan one."""
+    monkeypatch.delenv(METADATA_DIR_ENV, raising=False)
+    scene = replace(_without_valve_route(load_live_scene(offline=True)), navmap=None, grid=None)
+    viewer = ViewerApp(scene, port=free_port())
+    yield viewer
+    viewer.server.stop()
+
+
+@pytest.fixture
+def app_planning_valve_route(monkeypatch):
+    """No paths.json route to the valve, but a navmap to plan one."""
+    monkeypatch.delenv(METADATA_DIR_ENV, raising=False)
+    viewer = ViewerApp(_without_valve_route(load_live_scene(offline=True)), port=free_port())
     yield viewer
     viewer.server.stop()
 
@@ -245,3 +259,15 @@ def test_ask_copilot_fills_the_panel_without_blocking(app):
     assert not app.asking
     assert "CAVITATION_RISK" in app.copilot_panel.content
     assert "method:" in app.copilot_panel.content
+
+
+def test_target_without_a_route_gets_one_planned_from_the_avatar(app_planning_valve_route):
+    app = app_planning_valve_route
+    start = app.player.position()
+    app.pending_target = label_of(app, "obj_0002")
+    app.tick(0.1)
+    assert app.player.playing
+    assert app.status_panel.content == "Walking to CV-002 valve (obj_0002)."
+    np.testing.assert_allclose(app.player.waypoints[0][:2], start[:2], atol=0.2)
+    run_until_stopped(app)
+    assert app.status_panel.content == "Arrived at CV-002 valve (obj_0002)."
