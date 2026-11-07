@@ -118,7 +118,12 @@ pytest                                                                # tests
 ruff check . && ruff format --check .                                 # lint / format check
 ruff check --fix . && ruff format .                                   # auto-fix
 python scripts/make_mock_fixtures.py                                  # regenerate mock_scene after schema changes
+python scripts/run_viewer.py                                          # viewer on mock_scene (needs requirements-viewer.txt)
+python scripts/run_viewer.py --scene-dir data/processed/<scene_id>    # viewer on real artifacts
 ```
+
+The viewer prints its address when it starts. That's normally <http://localhost:8080>, but Viser
+moves to the next free port if 8080 is taken. Press `Ctrl+C` to stop it.
 
 The inspector opens the file read-only, memory-maps binary vertex data and reads only a seeded
 sample of rows. It reports header, encoding, elements, properties, 3DGS schema conformity (SH
@@ -176,8 +181,27 @@ Each developer works in their own package and imports only `valmet.common` from 
 To change a contract, change `contracts.py`, then the tests, then run `make_mock_fixtures.py`, and
 tell the team. If the change breaks existing artifacts, bump `SCHEMA_VERSION`.
 
+## Viewer
+
+Pick an object in the Navigate panel and the avatar walks its route to the object's inspection
+position. Faulty objects come first in the list. An object is faulty when its `condition_state` in
+the equipment data isn't `healthy`.
+
+- `integration/live_scene.py` joins scene artifacts with `valmet.api` once at startup. It's the
+  only viewer code that touches other modules.
+- Routes come only from `paths.json`, matched on `target_object_id`. The shortest one is used if an
+  object has several. Objects with no route show a message instead of moving.
+- Play continues the current walk if its object is still selected. Otherwise it starts the selected
+  object's route.
+- Each route is walked from its own `start`, so the avatar jumps there first.
+- Device data comes from `valmet.api`, so the viewer ignores `asset_mapping.json` in the scene
+  folder. For a real scene, set `$VALMET_METADATA_DIR` to that scene's metadata. Metadata from a
+  different `scene_id` is not shown.
+
 ## Known limitations
 
+- The viewer doesn't render the Gaussian splat yet, only boxes, routes and the avatar.
+- Fault states are read once at startup, so the viewer must restart to pick up changes.
 - `data/raw/Equipment Room.ply` was not available when this was set up, so the inspector is only
   validated on synthetic PLYs (binary LE/BE, ASCII). `tests/test_ply_inspect.py::test_real_equipment_room`
   runs automatically once the file is placed in `data/raw/`.
@@ -195,4 +219,4 @@ tell the team. If the change breaks existing artifacts, bump `SCHEMA_VERSION`.
 2. Dev 1: opacity/scale filtering, floor/obstacle split, occupancy grid, A*.
 3. Dev 2: choose the detection route (render views → YOLOE/SAM → lift to 3D, or segment directly in 3D).
 4. Dev 3: parse the Excel workbook into typed records and assign mappings to the mock objects.
-5. Dev 4: Viser app loading the splat and `mock_scene` boxes and paths.
+5. Dev 4: load the splat into the viewer once the real PLY and manifest are ready.
