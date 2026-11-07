@@ -17,7 +17,12 @@ from dataclasses import dataclass
 import numpy as np
 from scipy import ndimage
 
-from valmet.common.contracts import NavigationMapMetadata, NavigationPath, OrientedBox
+from valmet.common.contracts import (
+    DetectedObject,
+    NavigationMapMetadata,
+    NavigationPath,
+    OrientedBox,
+)
 from valmet.spatial.occupancy import walkable_components
 from valmet.spatial.proximity import footprint_distance
 
@@ -156,6 +161,40 @@ def plan_path(
         inspection_position=waypoints[-1],
         waypoints=waypoints,
     )
+
+
+def plan_path_to_label(
+    navmap: NavigationMapMetadata,
+    grid: np.ndarray,
+    objects: list[DetectedObject],
+    label: str,
+    start_xy: tuple[float, float] | None = None,
+    params: PlannerParams = PlannerParams(),
+    obstacles: np.ndarray | None = None,
+) -> tuple[NavigationPath, DetectedObject]:
+    """Route to the most confident object with this label that can be reached."""
+    want = label.strip().lower()
+    candidates = sorted(
+        (o for o in objects if (o.label or "").strip().lower() == want),
+        key=lambda o: (-(o.confidence or 0.0), o.object_id),
+    )
+    if not candidates:
+        raise UnreachableTargetError(f"no object labelled {label!r}")
+    for obj in candidates:
+        try:
+            path = plan_path(
+                navmap=navmap,
+                grid=grid,
+                target_box=obj.bbox,
+                target_object_id=obj.object_id,
+                start_xy=start_xy,
+                params=params,
+                obstacles=obstacles,
+            )
+        except UnreachableTargetError:
+            continue
+        return path, obj
+    raise UnreachableTargetError(f"none of {len(candidates)} objects labelled {label!r} is reachable")
 
 
 def path_clearance(

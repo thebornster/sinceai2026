@@ -4,13 +4,14 @@ import numpy as np
 import pytest
 
 from test_occupancy import PARAMS, synthetic_room
-from valmet.common.contracts import OrientedBox
+from valmet.common.contracts import DetectedObject, OrientedBox
 from valmet.spatial.occupancy import build_layers, build_occupancy
 from valmet.spatial.planner import (
     UnreachableTargetError,
     _line_free,
     path_clearance,
     plan_path,
+    plan_path_to_label,
     sideways_segments,
 )
 from valmet.spatial.proximity import footprint_distance
@@ -216,3 +217,45 @@ def test_obstacles_do_not_change_routes_that_fit_normally():
     with_squeeze = plan_path(**kwargs, obstacles=obstacles)
     assert not any(sideways_segments(navmap=navmap, grid=grid, path=with_squeeze))
     assert with_squeeze.length() == pytest.approx(normal.length(), abs=1e-6)
+
+
+def _obj(object_id: str, label: str, confidence: float, box: OrientedBox) -> DetectedObject:
+    return DetectedObject(
+        object_id=object_id,
+        scene_id="synthetic",
+        label=label,
+        confidence=confidence,
+        center=box.center,
+        bbox=box,
+    )
+
+
+def test_label_target_skips_unreachable_and_other_labels(room):
+    grid, navmap = room
+    far = OrientedBox(center=(50.0, 50.0, 0.5), extent=(0.5, 0.5, 1.0))
+    objects = [
+        _obj(object_id="obj_0001", label="pump", confidence=0.95, box=far),
+        _obj(object_id="obj_0002", label="motor", confidence=0.99, box=CRATE),
+        _obj(object_id="obj_0003", label="Pump", confidence=0.6, box=CRATE),
+    ]
+    path, obj = plan_path_to_label(
+        navmap=navmap,
+        grid=grid,
+        objects=objects,
+        label="pump",
+        start_xy=(2.5, 1.5),
+    )
+    assert obj.object_id == "obj_0003"
+    assert path.target_object_id == "obj_0003"
+
+
+def test_label_target_without_match_raises(room):
+    grid, navmap = room
+    objects = [_obj(object_id="obj_0001", label="motor", confidence=0.9, box=CRATE)]
+    with pytest.raises(UnreachableTargetError):
+        plan_path_to_label(
+            navmap=navmap,
+            grid=grid,
+            objects=objects,
+            label="pump",
+        )
