@@ -9,6 +9,8 @@ One directory per scene (``data/processed/<scene_id>/``, or the mock under
     occupancy.npy           uint8 grid, shape = navmap.shape (spatial)
     paths.json              list[NavigationPath]       (spatial)
     asset_mapping.json      list[AssetMapping]         (metadata)
+    semantic_details.json   per-object extras, planes  (semantic)
+    semantic/               segment points, members/, crops/ (semantic)
 """
 
 from __future__ import annotations
@@ -37,6 +39,9 @@ OBJECTS_FILE = "objects.json"
 NAVMAP_FILE = "navmap.json"
 PATHS_FILE = "paths.json"
 ASSET_MAPPING_FILE = "asset_mapping.json"
+SEMANTIC_DETAILS_FILE = "semantic_details.json"
+SEMANTIC_DIR = "semantic"
+CROPS_DIR = f"{SEMANTIC_DIR}/crops"
 
 M = TypeVar("M", bound=BaseModel)
 

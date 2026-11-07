@@ -145,6 +145,8 @@ def test_run_with_explicit_target_and_no_path(tmp_path, big_objects, registry):
         ("electric-motor", "ELECTRIC_MOTOR"),
         ("pressure_transmitter", "PRESSURE_TRANSMITTER"),
         ("Vibration Sensor", "VIBRATION_SENSOR"),
+        ("pressure transmitter/gauge", "PRESSURE_TRANSMITTER"),
+        ("Gauge", "PRESSURE_TRANSMITTER"),
         ("pipe", None),
         ("", None),
         (None, None),

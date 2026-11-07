@@ -5,6 +5,7 @@ The target comes from objects.json, or from a hand-placed box while segmentation
 
 Usage:
     python scripts/plan_path.py --target-object-id obj_0012
+    python scripts/plan_path.py --target-label pump
     python scripts/plan_path.py --target-box 1.2,-0.5,0.6,0.8,0.6,1.2 --start -4,2
 """
 
@@ -31,6 +32,7 @@ from valmet.spatial.planner import (
     UnreachableTargetError,
     path_clearance,
     plan_path,
+    plan_path_to_label,
     sideways_segments,
 )
 from valmet.spatial.preview import render_navmap
@@ -62,6 +64,9 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--report-dir", type=Path, default=REPO_ROOT / "reports")
     target = ap.add_mutually_exclusive_group(required=True)
     target.add_argument("--target-object-id", help="object_id from objects.json")
+    target.add_argument(
+        "--target-label", help="most confident reachable object with this label in objects.json"
+    )
     target.add_argument("--target-box", type=_floats, help="cx,cy,cz,ex,ey,ez[,yaw_deg]")
     ap.add_argument("--start", type=_floats, help="x,y start in world meters (default: auto)")
     ap.add_argument(
@@ -80,7 +85,24 @@ def main(argv: list[str] | None = None) -> int:
     obstacles = None
     if not args.no_sideways and (args.scene_dir / OBSTACLES_FILE).exists():
         obstacles = np.load(args.scene_dir / OBSTACLES_FILE)
-    if args.target_object_id:
+    start_xy = tuple(args.start[:2]) if args.start else None
+    params = PlannerParams(body_depth=args.body_depth)
+    if args.target_label:
+        try:
+            path, obj = plan_path_to_label(
+                navmap=navmap,
+                grid=grid,
+                objects=load_list(args.scene_dir / OBJECTS_FILE, DetectedObject),
+                label=args.target_label,
+                start_xy=start_xy,
+                params=params,
+                obstacles=obstacles,
+            )
+        except UnreachableTargetError as exc:
+            print(f"error: {exc}")
+            return 3
+        box, target_id = obj.bbox, obj.object_id
+    elif args.target_object_id:
         objects = {o.object_id: o for o in load_list(args.scene_dir / OBJECTS_FILE, DetectedObject)}
         if args.target_object_id not in objects:
             print(f"error: {args.target_object_id!r} not in {OBJECTS_FILE}")
@@ -89,19 +111,20 @@ def main(argv: list[str] | None = None) -> int:
     else:
         box, target_id = _box_from_arg(values=args.target_box), PLACEHOLDER_ID
 
-    try:
-        path = plan_path(
-            navmap=navmap,
-            grid=grid,
-            target_box=box,
-            target_object_id=target_id,
-            start_xy=tuple(args.start[:2]) if args.start else None,
-            params=PlannerParams(body_depth=args.body_depth),
-            obstacles=obstacles,
-        )
-    except UnreachableTargetError as exc:
-        print(f"error: {exc}")
-        return 3
+    if not args.target_label:
+        try:
+            path = plan_path(
+                navmap=navmap,
+                grid=grid,
+                target_box=box,
+                target_object_id=target_id,
+                start_xy=start_xy,
+                params=params,
+                obstacles=obstacles,
+            )
+        except UnreachableTargetError as exc:
+            print(f"error: {exc}")
+            return 3
 
     save_list(args.scene_dir / PATHS_FILE, [path])
     preview = render_navmap(

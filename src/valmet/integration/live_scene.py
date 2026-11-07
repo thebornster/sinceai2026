@@ -11,9 +11,13 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+import numpy as np
+
 from valmet import api
 from valmet.common import DetectedObject, NavigationMapMetadata, NavigationPath, SceneManifest
-from valmet.common.artifacts import MOCK_SCENE_DIR, SceneArtifacts
+from valmet.common.artifacts import CROPS_DIR, MOCK_SCENE_DIR, SceneArtifacts
+
+VIEWER_SPLATS_FILE = "viewer_splats.npz"  # written by valmet.preprocessing.export
 
 HEALTHY_STATE = "healthy"
 
@@ -26,6 +30,7 @@ class LiveObject:
     asset: dict[str, Any] | None = None  # api.get_asset(); None = no equipment record
     diagnosis: dict[str, Any] | None = None  # api.diagnose_fault()
     route: NavigationPath | None = None  # shortest path in paths.json; None = no route yet
+    crop: Path | None = None  # semantic render of the object, if labelling ran
 
     @property
     def object_id(self) -> str:
@@ -48,6 +53,8 @@ class LiveScene:
     manifest: SceneManifest
     objects: list[LiveObject]
     navmap: NavigationMapMetadata | None = None
+    # viser add_gaussian_splats arrays (centers, covariances, rgbs, opacities); None = not loaded
+    splats: dict[str, np.ndarray] | None = None
 
     @property
     def faulty(self) -> list[LiveObject]:
@@ -74,7 +81,17 @@ def _equipment(object_id: str, scene_id: str, offline: bool) -> tuple[dict | Non
     return asset, api.diagnose_fault(object_id, offline=offline)
 
 
-def load_live_scene(root: Path = MOCK_SCENE_DIR, offline: bool = False) -> LiveScene:
+def _load_splats(root: Path) -> dict[str, np.ndarray] | None:
+    path = Path(root) / VIEWER_SPLATS_FILE
+    if not path.exists():
+        return None
+    with np.load(path) as data:
+        return {key: data[key] for key in ("centers", "covariances", "rgbs", "opacities")}
+
+
+def load_live_scene(
+    root: Path = MOCK_SCENE_DIR, offline: bool = False, load_splats: bool = True
+) -> LiveScene:
     """Load and join everything the viewer shows. Raises ValueError if the scene is unusable."""
     artifacts = SceneArtifacts.load(root)
     problems = artifacts.check_consistency()
@@ -90,5 +107,15 @@ def load_live_scene(root: Path = MOCK_SCENE_DIR, offline: bool = False) -> LiveS
     objects = []
     for detected in artifacts.objects:
         asset, diagnosis = _equipment(detected.object_id, artifacts.manifest.scene_id, offline)
-        objects.append(LiveObject(detected, asset, diagnosis, routes.get(detected.object_id)))
-    return LiveScene(artifacts.manifest, objects, artifacts.navmap)
+        crop = Path(root) / CROPS_DIR / f"{detected.object_id}.png"
+        objects.append(
+            LiveObject(
+                detected,
+                asset,
+                diagnosis,
+                routes.get(detected.object_id),
+                crop if crop.exists() else None,
+            )
+        )
+    splats = _load_splats(root) if load_splats else None
+    return LiveScene(artifacts.manifest, objects, artifacts.navmap, splats)

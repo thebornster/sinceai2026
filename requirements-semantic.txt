@@ -6,7 +6,12 @@
 #   CUDA 12.x: pip install torch torchvision --index-url https://download.pytorch.org/whl/cu126
 # Then install this file. If torch is missing, pip pulls the default PyPI
 # build (CPU-only on Windows/macOS, a CUDA build on Linux), which may not match your machine.
--r requirements-core.txt
+-r requirements-spatial.txt
+
+# Vision labelling (valmet.semantic.label): Gemini client, crop rendering, .env loading.
+google-genai>=1.0
+pillow>=10.0
+python-dotenv>=1.0
 
 # YOLOE (open-vocabulary detection/segmentation) and SAM / SAM 2 / MobileSAM
 # wrappers. YOLOE needs ultralytics >= 8.3.99. Pulls in opencv-python and pillow.

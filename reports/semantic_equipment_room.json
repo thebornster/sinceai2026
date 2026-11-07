@@ -1,0 +1,63 @@
+{
+  "scene_id": "equipment_room",
+  "n_objects": 921,
+  "n_planes": 6,
+  "noise_fraction": 0.0684,
+  "hints": {
+    "unlabelled": 128,
+    "pipe segment": 594,
+    "fitting/valve": 199
+  },
+  "overhead": 86,
+  "planes": [
+    {
+      "name": "floor",
+      "label": "floor",
+      "axis": "z",
+      "value": 0.0,
+      "normal": null,
+      "n_points": 67362
+    },
+    {
+      "name": "ceiling",
+      "label": "ceiling",
+      "axis": "z",
+      "value": 2.3688,
+      "normal": null,
+      "n_points": 29891
+    },
+    {
+      "name": "wall_x_min",
+      "label": "wall",
+      "axis": "x",
+      "value": -5.2611,
+      "normal": null,
+      "n_points": 3568
+    },
+    {
+      "name": "wall_x_max",
+      "label": "wall",
+      "axis": "x",
+      "value": 5.2906,
+      "normal": null,
+      "n_points": 2378
+    },
+    {
+      "name": "wall_y_min",
+      "label": "wall",
+      "axis": "y",
+      "value": -4.1698,
+      "normal": null,
+      "n_points": 8445
+    },
+    {
+      "name": "wall_y_max",
+      "label": "wall",
+      "axis": "y",
+      "value": 4.2313,
+      "normal": null,
+      "n_points": 1837
+    }
+  ],
+  "seconds": 18.7
+}

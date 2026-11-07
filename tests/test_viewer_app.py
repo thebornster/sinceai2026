@@ -12,6 +12,7 @@ from valmet.viewer.app import (  # noqa: E402
     BOX_COLOR,
     FAULT_COLOR,
     HIGHLIGHT_COLOR,
+    SELECTED_COLOR,
     ViewerApp,
     target_label,
 )
@@ -27,7 +28,7 @@ def free_port() -> int:
 @pytest.fixture
 def app(monkeypatch):
     monkeypatch.delenv(METADATA_DIR_ENV, raising=False)
-    viewer = ViewerApp(load_live_scene(offline=True), port=free_port())
+    viewer = ViewerApp(load_live_scene(offline=True), port=free_port(), offline=True)
     yield viewer
     viewer.server.stop()
 
@@ -221,3 +222,26 @@ def test_play_on_a_target_without_a_route_does_not_walk_the_old_route(app_withou
     app.tick(0.1)
     assert not app.player.playing
     assert "No route to CV-002 valve (obj_0002)" in app.status_panel.content
+
+
+def test_selecting_an_object_shows_it_and_keeps_its_color_while_walking(app):
+    app.select("obj_0002")
+    assert color(app.boxes["obj_0002"]) == SELECTED_COLOR
+    assert "obj_0002" in app.selection_panel.content
+    assert not app.crop_image.visible
+    assert not app.ask_button.disabled
+
+    app.radius_slider.value = 5.0
+    app.tick(0.1)
+    assert color(app.boxes["obj_0002"]) == SELECTED_COLOR
+    app.select("obj_0001")
+    assert color(app.boxes["obj_0002"]) == HIGHLIGHT_COLOR
+
+
+def test_ask_copilot_fills_the_panel_without_blocking(app):
+    app.select("obj_0001")
+    worker = app.ask_copilot(app.selected)
+    worker.join(timeout=30)
+    assert not app.asking
+    assert "CAVITATION_RISK" in app.copilot_panel.content
+    assert "method:" in app.copilot_panel.content

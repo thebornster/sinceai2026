@@ -1,7 +1,14 @@
 import numpy as np
 import pytest
 
-from valmet.viewer.playback import PathPlayer, find_nearby, find_nearest
+from valmet.common.contracts import OrientedBox
+from valmet.viewer.playback import (
+    PathPlayer,
+    find_nearby,
+    find_nearest,
+    pick_object,
+    ray_box_distance,
+)
 
 ROUTE = [(0.0, 0.0, 0.0), (3.0, 0.0, 0.0), (3.0, 4.0, 0.0)]
 
@@ -116,3 +123,43 @@ def test_heading_follows_the_current_leg():
 
 def test_heading_of_a_route_with_no_length_is_zero():
     assert PathPlayer([(1, 2, 0)]).heading() == 0.0
+
+
+UNIT_BOX = OrientedBox(center=(0.0, 0.0, 0.0), extent=(1.0, 1.0, 1.0))
+
+
+def test_ray_enters_box_at_its_face():
+    t = ray_box_distance(np.array([-5.0, 0.0, 0.0]), np.array([2.0, 0.0, 0.0]), UNIT_BOX)
+    assert t == pytest.approx(4.5)
+
+
+@pytest.mark.parametrize(
+    "origin, direction",
+    [
+        ((-5.0, 2.0, 0.0), (1.0, 0.0, 0.0)),  # parallel, outside the slab
+        ((-5.0, 0.0, 0.0), (-1.0, 0.0, 0.0)),  # pointing away
+        ((0.0, 0.0, 0.0), (1.0, 0.0, 0.0)),  # starts inside
+    ],
+)
+def test_ray_misses(origin, direction):
+    assert ray_box_distance(np.array(origin), np.array(direction), UNIT_BOX) is None
+
+
+def test_rotated_box_is_hit_in_its_own_frame():
+    c, s = np.cos(np.radians(45)), np.sin(np.radians(45))
+    box = OrientedBox(
+        center=(0.0, 0.0, 0.0),
+        extent=(2.0, 0.2, 0.2),
+        rotation=[[c, -s, 0.0], [s, c, 0.0], [0.0, 0.0, 1.0]],
+    )
+    # The bar reaches 1.0 along the diagonal; a ray along y=1 passes beyond its end.
+    t = ray_box_distance(np.array([-5.0, -5.0, 0.0]), np.array([1.0, 1.0, 0.0]), box)
+    assert t == pytest.approx(np.hypot(5.0, 5.0) - 1.0)
+    assert ray_box_distance(np.array([-5.0, 1.0, 0.0]), np.array([1.0, 0.0, 0.0]), box) is None
+
+
+def test_pick_returns_the_first_box_along_the_ray():
+    far = OrientedBox(center=(3.0, 0.0, 0.0), extent=(1.0, 1.0, 1.0))
+    boxes = {"far": far, "near": UNIT_BOX, "aside": OrientedBox(center=(0, 5, 0), extent=(1, 1, 1))}
+    assert pick_object(np.array([-5.0, 0.0, 0.0]), np.array([1.0, 0.0, 0.0]), boxes) == "near"
+    assert pick_object(np.array([-5.0, 0.0, 3.0]), np.array([1.0, 0.0, 0.0]), boxes) is None
