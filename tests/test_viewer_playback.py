@@ -6,8 +6,8 @@ from valmet.viewer.playback import (
     PathPlayer,
     find_nearby,
     find_nearest,
+    pick_along_ray,
     pick_object,
-    pick_point,
     ray_box_distance,
 )
 
@@ -166,9 +166,31 @@ def test_pick_returns_the_first_box_along_the_ray():
     assert pick_object(np.array([-5.0, 0.0, 3.0]), np.array([1.0, 0.0, 0.0]), boxes) is None
 
 
-def test_point_pick_takes_the_nearest_point_near_the_ray():
-    points = np.array([[5.0, 0.0, 0.0], [3.0, 0.02, 0.0], [2.0, 1.0, 0.0], [-1.0, 0.0, 0.0]])
-    origin, direction = np.zeros(3), np.array([1.0, 0.0, 0.0])
-    assert pick_point(origin, direction, points, 0.03, 0.01) == 1
-    assert pick_point(origin, -direction, points, 0.03, 0.01) == 3
-    assert pick_point(origin, np.array([0.0, 0.0, 1.0]), points, 0.03, 0.01) is None
+def ray_pick(points, labels, transparent=(False, False, False)):
+    return pick_along_ray(
+        origin=np.zeros(3),
+        direction=np.array([1.0, 0.0, 0.0]),
+        points=np.asarray(points, dtype=float),
+        labels=np.asarray(labels),
+        transparent=np.asarray(transparent),
+    )
+
+
+def test_ray_pick_is_blocked_by_structure_in_front():
+    assert ray_pick([[2.0, 0.0, 0.0], [3.0, 0.0, 0.0]], [-2, 0]) == ([], None)
+    object_then_wall = ray_pick([[2.0, 0.0, 0.0], [2.5, 0.0, 0.0]], [0, -2])
+    assert object_then_wall.objects == [0]
+    np.testing.assert_allclose(object_then_wall.point, [2.0, 0.0, 0.0])
+
+
+def test_ray_pick_prefers_aim_over_depth_on_the_surface():
+    # Same surface: object 0 a little nearer but off the cursor, object 1 right under it.
+    picked = ray_pick([[2.0, 0.012, 0.0], [2.03, 0.0, 0.0]], [0, 1])
+    assert picked.objects == [1, 0]
+
+
+def test_ray_pick_lists_objects_behind_front_to_back_and_skips_hidden_ones():
+    points = [[2.0, 0.0, 0.0], [4.0, 0.0, 0.0], [3.0, 0.0, 0.0], [9.0, 5.0, 0.0]]
+    assert ray_pick(points, [0, 1, 2, 1]).objects == [0, 2, 1]
+    assert ray_pick(points, [0, 1, 2, 1], transparent=[True, False, False]).objects == [2, 1]
+    assert ray_pick(points, [0, 1, 2, 1], transparent=[True, True, True]).objects == []

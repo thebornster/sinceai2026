@@ -323,13 +323,20 @@ def test_click_uses_segment_points_over_boxes(monkeypatch):
     # One point of obj_0003 placed in front of obj_0002 along the ray: points decide, not boxes.
     points = np.array([center, center + (0.0, 0.0, 5.0)], np.float32)
     viewer = ViewerApp(
-        replace(scene, pick_points=points, pick_objects=np.array([1, 2])),
+        replace(scene, pick_points=points, pick_labels=np.array([1, 2])),
         port=free_port(),
     )
     try:
         origin = center + np.array([0.0, 0.0, 20.0])
-        assert viewer.pick(origin, np.array([0.0, 0.0, -1.0])) == "obj_0003"
+        down = np.array([0.0, 0.0, -1.0])
+        assert viewer.pick(origin, down) == "obj_0003"
+        viewer.click(origin, down)
+        assert viewer.selected.object_id == "obj_0003"
+        viewer.click(origin, down)  # same spot again: the object behind
+        assert viewer.selected.object_id == "obj_0002"
+        viewer.click(origin, down)  # and around
+        assert viewer.selected.object_id == "obj_0003"
         viewer.boxes["obj_0003"].visible = False
-        assert viewer.pick(origin, np.array([0.0, 0.0, -1.0])) == "obj_0002"
+        assert viewer.pick(origin, down) == "obj_0002"
     finally:
         viewer.server.stop()

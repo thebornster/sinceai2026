@@ -27,8 +27,8 @@ from valmet.viewer.playback import (
     PathPlayer,
     find_nearby,
     find_nearest,
+    pick_along_ray,
     pick_object,
-    pick_point,
 )
 
 BOX_COLOR = (120, 144, 170)
@@ -39,8 +39,8 @@ ROUTE_COLOR = (40, 120, 255)
 ROUTE_LIFT = 0.02  # keeps the route line just above the floor grid
 FRAME_TIME = 1.0 / 30.0  # seconds between updates (30 per second)
 SELECTED_FILL_OPACITY = 0.35
-PICK_RADIUS = 0.03  # meters around the click ray at the camera ...
-PICK_RADIUS_PER_METER = 0.01  # ... growing with distance
+SAME_SPOT_COS = np.cos(np.radians(0.5))  # a click this close to the last one goes deeper
+HIT_MARKER_RADIUS = 0.02
 SHOW_ALL = "All objects"
 SHOW_FAULTY = "Faulty only"
 FLY_MIN_DISTANCE = 1.2  # meters from the camera to a small object after "Fly to"
@@ -85,6 +85,7 @@ class ViewerApp:
         self.highlighted: set[str] = set()
         self.shown_id: str | None = None  # the object the panels are showing
         self.selected: LiveObject | None = None  # the clicked object
+        self.last_click: tuple[np.ndarray, np.ndarray] | None = None  # ray origin, direction
         self.asking = False  # an LLM diagnosis is running
         self._add_gui()
         self.server.scene.on_click()(self._on_scene_click)
@@ -226,33 +227,68 @@ class ViewerApp:
     def _on_scene_click(self, event: viser.SceneClickEvent) -> None:
         if event.ray_origin is None or event.ray_direction is None:
             return
-        object_id = self.pick(np.asarray(event.ray_origin), np.asarray(event.ray_direction))
-        if object_id is not None:
-            self.select(object_id)
+        self.click(np.asarray(event.ray_origin), np.asarray(event.ray_direction))
+
+    def click(self, origin: np.ndarray, direction: np.ndarray) -> None:
+        """Select the object under the click; clicking the same spot again selects the next
+        object behind it."""
+        origin = np.asarray(origin, dtype=float)
+        direction = np.asarray(direction, dtype=float) / np.linalg.norm(direction)
+        previous, self.last_click = self.last_click, (origin, direction)
+        hits, point = self.hits(origin, direction)
+        if not hits:
+            return
+        object_id = hits[0]
+        same_spot = (
+            previous is not None
+            and np.allclose(previous[0], origin, atol=1e-3)
+            and float(previous[1] @ direction) > SAME_SPOT_COS
+        )
+        if same_spot and self.selected is not None and self.selected.object_id in hits:
+            object_id = hits[(hits.index(self.selected.object_id) + 1) % len(hits)]
+        self.select(object_id)
+        if point is not None:
+            self.server.scene.add_icosphere(
+                "/selection_hit",
+                radius=HIT_MARKER_RADIUS,
+                color=SELECTED_COLOR,
+                position=tuple(float(v) for v in point),
+            )
+        if len(hits) > 1:
+            self.selection_panel.content += (
+                "\n\n*Click again on the same spot to select the object behind.*"
+            )
 
     def pick(self, origin: np.ndarray, direction: np.ndarray) -> str | None:
-        """The visible object under the click: by its segmented points when the scene has
-        them (a big box in front can't steal the click), else by the first box entered."""
+        """The visible object under the click, or None."""
+        hits, _ = self.hits(origin, direction)
+        return hits[0] if hits else None
+
+    def hits(
+        self, origin: np.ndarray, direction: np.ndarray
+    ) -> tuple[list[str], np.ndarray | None]:
+        """Visible objects along the click ray, front to back, and where the first is hit.
+
+        Uses the segmented Gaussians when the scene has them (walls block the ray, a big box
+        in front can't steal the click), else the first box entered."""
         scene = self.scene
         visible = np.array([self.boxes[obj.object_id].visible for obj in scene.objects])
         if scene.pick_points is not None:
-            mask = visible[scene.pick_objects]
-            index = pick_point(
-                origin,
-                direction,
-                scene.pick_points[mask],
-                PICK_RADIUS,
-                PICK_RADIUS_PER_METER,
+            ray = pick_along_ray(
+                origin=origin,
+                direction=direction,
+                points=scene.pick_points,
+                labels=scene.pick_labels,
+                transparent=~visible,
             )
-            if index is None:
-                return None
-            return scene.objects[int(scene.pick_objects[mask][index])].object_id
+            return [scene.objects[k].object_id for k in ray.objects], ray.point
         boxes = {
             obj.object_id: obj.detected.bbox
             for obj, shown in zip(scene.objects, visible, strict=True)
             if shown
         }
-        return pick_object(origin, direction, boxes)
+        object_id = pick_object(origin, direction, boxes)
+        return ([object_id] if object_id is not None else []), None
 
     def select(self, object_id: str) -> None:
         """Show one object in the selection panel and color its box."""

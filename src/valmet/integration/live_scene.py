@@ -24,6 +24,8 @@ from valmet.common.artifacts import (
 
 VIEWER_SPLATS_FILE = "viewer_splats.npz"  # written by valmet.preprocessing.export
 OBSTACLES_FILE = "obstacles.npy"  # written by valmet.spatial.occupancy
+SCENE_CLEAN_FILE = "scene_clean.npz"  # written by valmet.preprocessing.export
+STRUCTURE = -2  # segment label of walls, floor and ceiling
 
 HEALTHY_STATE = "healthy"
 
@@ -64,9 +66,10 @@ class LiveScene:
     # occupancy grid and uninflated obstacle mask, for routes paths.json does not have
     grid: np.ndarray | None = None
     obstacles: np.ndarray | None = None
-    # segmented points and the index into `objects` each belongs to, for click picking
+    # cleaned Gaussians for click picking, labelled with their index into `objects`, or
+    # STRUCTURE for walls/floor/ceiling (they block clicks but are never picked)
     pick_points: np.ndarray | None = None
-    pick_objects: np.ndarray | None = None
+    pick_labels: np.ndarray | None = None
 
     @property
     def faulty(self) -> list[LiveObject]:
@@ -102,13 +105,18 @@ def _load_splats(root: Path) -> dict[str, np.ndarray] | None:
 
 
 def _load_pick_points(root: Path, n_objects: int) -> tuple[np.ndarray | None, np.ndarray | None]:
-    path = Path(root) / SEGMENT_POINTS_FILE
-    if not path.exists():
+    """Objects and structure; noise (floaters) and labels of objects no longer there dropped."""
+    segment, clean = Path(root) / SEGMENT_POINTS_FILE, Path(root) / SCENE_CLEAN_FILE
+    if not segment.exists() or not clean.exists():
         return None, None
-    with np.load(path) as data:
-        xyz, labels = data["xyz"], data["labels"]
-    keep = (labels >= 0) & (labels < n_objects)
-    return xyz[keep], labels[keep]
+    with np.load(segment) as data:
+        labels = data["gaussian_labels"]
+    with np.load(clean) as data:
+        positions = data["positions"]
+    if len(labels) != len(positions):  # scene re-preprocessed since segmentation
+        return None, None
+    keep = (labels == STRUCTURE) | ((labels >= 0) & (labels < n_objects))
+    return positions[keep], labels[keep]
 
 
 def load_live_scene(
@@ -145,7 +153,7 @@ def load_live_scene(
         grid = artifacts.load_occupancy()
         if (Path(root) / OBSTACLES_FILE).exists():
             obstacles = np.load(Path(root) / OBSTACLES_FILE)
-    pick_points, pick_objects = _load_pick_points(root, len(objects))
+    pick_points, pick_labels = _load_pick_points(root, len(objects))
     return LiveScene(
         artifacts.manifest,
         objects,
@@ -154,5 +162,5 @@ def load_live_scene(
         grid,
         obstacles,
         pick_points,
-        pick_objects,
+        pick_labels,
     )

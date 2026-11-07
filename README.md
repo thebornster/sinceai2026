@@ -209,8 +209,10 @@ the equipment data isn't `healthy`.
 - Gaussian splats from `viewer_splats.npz` are drawn when present (`--no-splats` skips them).
 - "Display" switches to faulty objects only (the selected and walked-to objects stay visible).
   Text labels are off except for the selected object; "Show labels" turns them all on.
-- Clicks pick the object whose segmented points are nearest along the ray (boxes when there are
-  none). The selection gets a translucent fill, and "Only show selected" hides everything else.
+- Clicks pick the object under the cursor from its segmented Gaussians (boxes when there are
+  none); walls block the click and a dot marks where it landed. Click the same spot again to
+  select the object behind. The selection gets a translucent fill, and "Only show selected" hides
+  everything else.
 - Click a box to inspect it: metadata, the semantic crop, "Fly to object" and "Ask copilot", which
   runs `diagnose_fault(use_llm=True)` in the background.
 - Device data comes from `valmet.api`, so the viewer ignores `asset_mapping.json` in the scene
