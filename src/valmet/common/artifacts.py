@@ -42,6 +42,7 @@ ASSET_MAPPING_FILE = "asset_mapping.json"
 SEMANTIC_DETAILS_FILE = "semantic_details.json"
 SEMANTIC_DIR = "semantic"
 CROPS_DIR = f"{SEMANTIC_DIR}/crops"
+SEGMENT_POINTS_FILE = f"{SEMANTIC_DIR}/segment_points.npz"
 
 M = TypeVar("M", bound=BaseModel)
 

@@ -126,3 +126,23 @@ def pick_object(
         if t is not None and t < best_t:
             best_id, best_t = object_id, t
     return best_id
+
+
+def pick_point(
+    origin: np.ndarray,
+    direction: np.ndarray,
+    points: np.ndarray,
+    radius: float,
+    radius_per_meter: float,
+) -> int | None:
+    """Index of the nearest point the ray passes within a distance-growing radius of, or None."""
+    d = np.asarray(direction, dtype=float)
+    d = d / np.linalg.norm(d)
+    v = points - np.asarray(origin, dtype=float)
+    t = v @ d
+    miss = np.linalg.norm(v - np.outer(t, d), axis=1)
+    hit = (t > 0) & (miss < radius + radius_per_meter * np.maximum(t, 0))
+    if not hit.any():
+        return None
+    candidates = np.flatnonzero(hit)
+    return int(candidates[np.argmin(t[hit])])

@@ -289,3 +289,41 @@ def test_faulty_only_hides_healthy_objects_but_keeps_selection_and_destination(a
     app.show_dropdown.value = "All objects"
     app.apply_visibility()
     assert all(box.visible for box in app.boxes.values())
+
+
+def test_selection_is_filled_and_can_be_shown_alone(app):
+    app.labels_checkbox.value = False
+    app.select("obj_0002")
+    assert app.labels["obj_0002"].visible  # the selected label stays on
+    assert not app.labels["obj_0001"].visible
+    app.isolate_checkbox.value = True
+    app.apply_visibility()
+    assert [i for i, box in app.boxes.items() if box.visible] == ["obj_0002"]
+
+
+def test_click_picks_the_visible_box_along_the_ray(app):
+    center = np.asarray(app.objects["obj_0002"].detected.bbox.center)
+    origin = center + np.array([0.0, 0.0, 20.0])
+    assert app.pick(origin, np.array([0.0, 0.0, -1.0])) == "obj_0002"
+    app.show_dropdown.value = "Faulty only"
+    app.apply_visibility()
+    assert app.pick(origin, np.array([0.0, 0.0, -1.0])) != "obj_0002"
+
+
+def test_click_uses_segment_points_over_boxes(monkeypatch):
+    monkeypatch.delenv(METADATA_DIR_ENV, raising=False)
+    scene = load_live_scene(offline=True)
+    center = np.asarray(scene.objects[1].detected.center)  # obj_0002
+    # One point of obj_0003 placed in front of obj_0002 along the ray: points decide, not boxes.
+    points = np.array([center, center + (0.0, 0.0, 5.0)], np.float32)
+    viewer = ViewerApp(
+        replace(scene, pick_points=points, pick_objects=np.array([1, 2])),
+        port=free_port(),
+    )
+    try:
+        origin = center + np.array([0.0, 0.0, 20.0])
+        assert viewer.pick(origin, np.array([0.0, 0.0, -1.0])) == "obj_0003"
+        viewer.boxes["obj_0003"].visible = False
+        assert viewer.pick(origin, np.array([0.0, 0.0, -1.0])) == "obj_0002"
+    finally:
+        viewer.server.stop()

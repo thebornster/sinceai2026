@@ -15,7 +15,12 @@ import numpy as np
 
 from valmet import api
 from valmet.common import DetectedObject, NavigationMapMetadata, NavigationPath, SceneManifest
-from valmet.common.artifacts import CROPS_DIR, MOCK_SCENE_DIR, SceneArtifacts
+from valmet.common.artifacts import (
+    CROPS_DIR,
+    MOCK_SCENE_DIR,
+    SEGMENT_POINTS_FILE,
+    SceneArtifacts,
+)
 
 VIEWER_SPLATS_FILE = "viewer_splats.npz"  # written by valmet.preprocessing.export
 OBSTACLES_FILE = "obstacles.npy"  # written by valmet.spatial.occupancy
@@ -59,6 +64,9 @@ class LiveScene:
     # occupancy grid and uninflated obstacle mask, for routes paths.json does not have
     grid: np.ndarray | None = None
     obstacles: np.ndarray | None = None
+    # segmented points and the index into `objects` each belongs to, for click picking
+    pick_points: np.ndarray | None = None
+    pick_objects: np.ndarray | None = None
 
     @property
     def faulty(self) -> list[LiveObject]:
@@ -91,6 +99,16 @@ def _load_splats(root: Path) -> dict[str, np.ndarray] | None:
         return None
     with np.load(path) as data:
         return {key: data[key] for key in ("centers", "covariances", "rgbs", "opacities")}
+
+
+def _load_pick_points(root: Path, n_objects: int) -> tuple[np.ndarray | None, np.ndarray | None]:
+    path = Path(root) / SEGMENT_POINTS_FILE
+    if not path.exists():
+        return None, None
+    with np.load(path) as data:
+        xyz, labels = data["xyz"], data["labels"]
+    keep = (labels >= 0) & (labels < n_objects)
+    return xyz[keep], labels[keep]
 
 
 def load_live_scene(
@@ -127,4 +145,14 @@ def load_live_scene(
         grid = artifacts.load_occupancy()
         if (Path(root) / OBSTACLES_FILE).exists():
             obstacles = np.load(Path(root) / OBSTACLES_FILE)
-    return LiveScene(artifacts.manifest, objects, artifacts.navmap, splats, grid, obstacles)
+    pick_points, pick_objects = _load_pick_points(root, len(objects))
+    return LiveScene(
+        artifacts.manifest,
+        objects,
+        artifacts.navmap,
+        splats,
+        grid,
+        obstacles,
+        pick_points,
+        pick_objects,
+    )

@@ -7,6 +7,7 @@ from valmet.viewer.playback import (
     find_nearby,
     find_nearest,
     pick_object,
+    pick_point,
     ray_box_distance,
 )
 
@@ -163,3 +164,11 @@ def test_pick_returns_the_first_box_along_the_ray():
     boxes = {"far": far, "near": UNIT_BOX, "aside": OrientedBox(center=(0, 5, 0), extent=(1, 1, 1))}
     assert pick_object(np.array([-5.0, 0.0, 0.0]), np.array([1.0, 0.0, 0.0]), boxes) == "near"
     assert pick_object(np.array([-5.0, 0.0, 3.0]), np.array([1.0, 0.0, 0.0]), boxes) is None
+
+
+def test_point_pick_takes_the_nearest_point_near_the_ray():
+    points = np.array([[5.0, 0.0, 0.0], [3.0, 0.02, 0.0], [2.0, 1.0, 0.0], [-1.0, 0.0, 0.0]])
+    origin, direction = np.zeros(3), np.array([1.0, 0.0, 0.0])
+    assert pick_point(origin, direction, points, 0.03, 0.01) == 1
+    assert pick_point(origin, -direction, points, 0.03, 0.01) == 3
+    assert pick_point(origin, np.array([0.0, 0.0, 1.0]), points, 0.03, 0.01) is None

@@ -42,6 +42,7 @@ from valmet.common.artifacts import (  # noqa: E402
     OBJECTS_FILE,
     REPO_ROOT,
     SEMANTIC_DETAILS_FILE,
+    SEGMENT_POINTS_FILE,
     SEMANTIC_DIR,
     load_model,
     save_list,
@@ -55,7 +56,6 @@ from valmet.common.contracts import (  # noqa: E402
 from valmet.preprocessing.export import SCENE_CLEAN_FILE  # noqa: E402
 
 DETAILS_FILE = SEMANTIC_DETAILS_FILE
-SEGMENT_POINTS_FILE = f"{SEMANTIC_DIR}/segment_points.npz"
 MEMBERS_DIR = f"{SEMANTIC_DIR}/members"
 
 NOISE = -1

@@ -7,6 +7,7 @@ from valmet.common import NavigationPath
 from valmet.common.artifacts import (
     CROPS_DIR,
     MANIFEST_FILE,
+    SEGMENT_POINTS_FILE,
     MOCK_SCENE_DIR,
     OBJECTS_FILE,
     PATHS_FILE,
@@ -187,3 +188,16 @@ def test_splats_and_crops_are_loaded_when_present(tmp_path):
     assert by_id(scene, "obj_0001").crop == root / CROPS_DIR / "obj_0001.png"
     assert by_id(scene, "obj_0002").crop is None
     assert load_live_scene(root, offline=True, load_splats=False).splats is None
+
+
+def test_pick_points_keep_only_object_points(tmp_path):
+    root = copy_mock(tmp_path)
+    (root / SEGMENT_POINTS_FILE).parent.mkdir(parents=True)
+    np.savez(
+        root / SEGMENT_POINTS_FILE,
+        xyz=np.arange(15, dtype=np.float32).reshape(5, 3),
+        labels=np.array([0, -1, 2, -2, 7]),  # 7: stale, beyond the 3 objects
+    )
+    scene = load_live_scene(root, offline=True)
+    np.testing.assert_array_equal(scene.pick_objects, [0, 2])
+    assert scene.pick_points.shape == (2, 3)

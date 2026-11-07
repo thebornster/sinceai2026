@@ -23,7 +23,13 @@ from valmet.integration.live_scene import LiveObject, LiveScene
 from valmet.spatial.planner import UnreachableTargetError, plan_path
 from valmet.viewer.avatar import Person
 from valmet.viewer.panels import format_diagnosis, format_metadata
-from valmet.viewer.playback import PathPlayer, find_nearby, find_nearest, pick_object
+from valmet.viewer.playback import (
+    PathPlayer,
+    find_nearby,
+    find_nearest,
+    pick_object,
+    pick_point,
+)
 
 BOX_COLOR = (120, 144, 170)
 HIGHLIGHT_COLOR = (60, 220, 120)  # boxes close to the avatar
@@ -32,6 +38,9 @@ SELECTED_COLOR = (255, 0, 255)  # the clicked box
 ROUTE_COLOR = (40, 120, 255)
 ROUTE_LIFT = 0.02  # keeps the route line just above the floor grid
 FRAME_TIME = 1.0 / 30.0  # seconds between updates (30 per second)
+SELECTED_FILL_OPACITY = 0.35
+PICK_RADIUS = 0.03  # meters around the click ray at the camera ...
+PICK_RADIUS_PER_METER = 0.01  # ... growing with distance
 SHOW_ALL = "All objects"
 SHOW_FAULTY = "Faulty only"
 FLY_MIN_DISTANCE = 1.2  # meters from the camera to a small object after "Fly to"
@@ -152,6 +161,7 @@ class ViewerApp:
         with gui.add_folder("Display"):
             self.show_dropdown = gui.add_dropdown("Show", (SHOW_ALL, SHOW_FAULTY))
             self.labels_checkbox = gui.add_checkbox("Show labels", initial_value=True)
+            self.isolate_checkbox = gui.add_checkbox("Only show selected", initial_value=False)
         with gui.add_folder("Playback"):
             play_button = gui.add_button("Play")
             pause_button = gui.add_button("Pause")
@@ -180,6 +190,7 @@ class ViewerApp:
         self.fly_button = fly_button
         self.show_dropdown.on_update(lambda _: self.apply_visibility())
         self.labels_checkbox.on_update(lambda _: self.apply_visibility())
+        self.isolate_checkbox.on_update(lambda _: self.apply_visibility())
         fly_button.on_click(self._on_fly)
         self.ask_button.on_click(self._on_ask)
 
@@ -198,6 +209,8 @@ class ViewerApp:
 
     def is_shown(self, obj: LiveObject) -> bool:
         """Faulty-only mode still shows the selected object and the one being walked to."""
+        if self.isolate_checkbox.value and self.selected is not None:
+            return obj is self.selected
         if self.show_dropdown.value == SHOW_ALL or obj.is_faulty:
             return True
         return obj in (self.selected, self.destination, self.route_target)
@@ -206,23 +219,39 @@ class ViewerApp:
         for object_id, obj in self.objects.items():
             shown = self.is_shown(obj)
             self.boxes[object_id].visible = shown
-            self.labels[object_id].visible = shown and self.labels_checkbox.value
+            is_selected = obj is self.selected
+            self.labels[object_id].visible = shown and (self.labels_checkbox.value or is_selected)
 
     def _on_scene_click(self, event: viser.SceneClickEvent) -> None:
         if event.ray_origin is None or event.ray_direction is None:
             return
-        boxes = {
-            object_id: obj.detected.bbox
-            for object_id, obj in self.objects.items()
-            if self.boxes[object_id].visible
-        }
-        object_id = pick_object(
-            np.asarray(event.ray_origin),
-            np.asarray(event.ray_direction),
-            boxes,
-        )
+        object_id = self.pick(np.asarray(event.ray_origin), np.asarray(event.ray_direction))
         if object_id is not None:
             self.select(object_id)
+
+    def pick(self, origin: np.ndarray, direction: np.ndarray) -> str | None:
+        """The visible object under the click: by its segmented points when the scene has
+        them (a big box in front can't steal the click), else by the first box entered."""
+        scene = self.scene
+        visible = np.array([self.boxes[obj.object_id].visible for obj in scene.objects])
+        if scene.pick_points is not None:
+            mask = visible[scene.pick_objects]
+            index = pick_point(
+                origin,
+                direction,
+                scene.pick_points[mask],
+                PICK_RADIUS,
+                PICK_RADIUS_PER_METER,
+            )
+            if index is None:
+                return None
+            return scene.objects[int(scene.pick_objects[mask][index])].object_id
+        boxes = {
+            obj.object_id: obj.detected.bbox
+            for obj, shown in zip(scene.objects, visible, strict=True)
+            if shown
+        }
+        return pick_object(origin, direction, boxes)
 
     def select(self, object_id: str) -> None:
         """Show one object in the selection panel and color its box."""
@@ -231,6 +260,15 @@ class ViewerApp:
         if previous is not None:
             self.boxes[previous.object_id].color = self._box_color(previous.object_id)
         self.boxes[object_id].color = SELECTED_COLOR
+        bbox = self.selected.detected.bbox
+        self.server.scene.add_box(
+            "/selection",
+            color=SELECTED_COLOR,
+            dimensions=bbox.extent,
+            wxyz=tf.SO3.from_matrix(np.asarray(bbox.rotation)).wxyz,
+            position=bbox.center,
+            opacity=SELECTED_FILL_OPACITY,
+        )
         self.selection_panel.content = format_metadata(self.selected)
         crop = self.selected.crop
         self.crop_image.visible = crop is not None
