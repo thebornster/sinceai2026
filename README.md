@@ -76,7 +76,7 @@ pip install -e .
 |---|---|---|
 | `requirements-core.txt` | everyone, Dev 3 | numpy, scipy, plyfile, pydantic 2, pandas, openpyxl, pytest, ruff |
 | `requirements-spatial.txt` | Dev 1 | open3d |
-| `requirements-semantic.txt` | Dev 2 | ultralytics (YOLOE, SAM/SAM 2 wrappers). **Install PyTorch first**, see below |
+| `requirements-semantic.txt` | Dev 2 | spatial deps, google-genai, pillow, python-dotenv, ultralytics (YOLOE, SAM/SAM 2 wrappers). **Install PyTorch first**, see below |
 | `requirements-viewer.txt` | Dev 4 | viser |
 
 Each file includes core via `-r`, so installing more than one is fine.
@@ -120,6 +120,17 @@ ruff check --fix . && ruff format .                                   # auto-fix
 python scripts/make_mock_fixtures.py                                  # regenerate mock_scene after schema changes
 python scripts/run_viewer.py                                          # viewer on mock_scene (needs requirements-viewer.txt)
 python scripts/run_viewer.py --scene-dir data/processed/<scene_id>    # viewer on real artifacts
+```
+
+Semantic stage on a preprocessed scene (needs `requirements-semantic.txt`):
+
+```bash
+python -m valmet.semantic.segment --scene-dir data/processed/<scene_id>              # objects.json, unlabelled
+python -m valmet.semantic.label --scene-dir data/processed/<scene_id> --rules-only   # geometry-rule labels
+python -m valmet.semantic.label --scene-dir data/processed/<scene_id>                # Gemini vision, needs GEMINI_API_KEY
+python scripts/plan_path.py --target-label pump                                      # route to the best reachable pump
+python -m valmet.metadata.mapping --scene-dir data/processed/<scene_id>
+VALMET_METADATA_DIR=data/processed/<scene_id> python scripts/run_viewer.py --scene-dir data/processed/<scene_id>
 ```
 
 The viewer prints its address when it starts. That's normally <http://localhost:8080>, but Viser
@@ -194,6 +205,9 @@ the equipment data isn't `healthy`.
 - Play continues the current walk if its object is still selected. Otherwise it starts the selected
   object's route.
 - Each route is walked from its own `start`, so the avatar jumps there first.
+- Gaussian splats from `viewer_splats.npz` are drawn when present (`--no-splats` skips them).
+- Click a box to inspect it: metadata, the semantic crop, "Fly to object" and "Ask copilot", which
+  runs `diagnose_fault(use_llm=True)` in the background.
 - Device data comes from `valmet.api`, so the viewer ignores `asset_mapping.json` in the scene
   folder. For a real scene, set `$VALMET_METADATA_DIR` to that scene's metadata. Metadata from a
   different `scene_id` is not shown.
