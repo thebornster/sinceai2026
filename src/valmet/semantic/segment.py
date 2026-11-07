@@ -34,6 +34,7 @@ import matplotlib.pyplot as plt  # noqa: E402
 import numpy as np  # noqa: E402
 import open3d as o3d  # noqa: E402
 from matplotlib.patches import Rectangle  # noqa: E402
+from scipy import ndimage  # noqa: E402
 from scipy.spatial import cKDTree  # noqa: E402
 
 from valmet.common.artifacts import (  # noqa: E402
@@ -77,6 +78,12 @@ class SegmentParams:
     plane_tol: float = 0.058
     plane_bin: float = 0.023
     plane_peak_frac: float = 0.25  # histogram peak must hold this fraction of the axis maximum
+    # The scanned floor is not flat (a few cm over the room), so it is removed relative to a
+    # local height map; points this close to it go whatever their (noisy) normal says.
+    floor_cell: float = 0.5
+    floor_cell_min_points: int = 50
+    floor_tight_tol: float = 0.03
+    min_object_top: float = 0.12  # objects lying entirely this low are floor debris
     ransac_dist: float = 0.023
     ransac_n: int = 3
     ransac_iters: int = 2000
@@ -174,15 +181,47 @@ def detect_planes(xyz: np.ndarray, normals: np.ndarray, sp: SegmentParams) -> li
     return planes
 
 
+def floor_height(xyz: np.ndarray, normals: np.ndarray, sp: SegmentParams) -> np.ndarray:
+    """Local floor z under every point: median of upward-facing points near z=0 per grid cell,
+    empty cells filled from the nearest measured cell."""
+    near = (np.abs(xyz[:, 2]) < sp.plane_tol) & (np.abs(normals[:, 2]) > sp.plane_normal_dot)
+    lo = xyz[:, :2].min(0)
+    cells = np.floor((xyz[:, :2] - lo) / sp.floor_cell).astype(int)
+    shape = tuple(cells.max(0) + 1)
+    flat = np.ravel_multi_index(cells.T, shape)
+    heights = np.zeros(shape)
+    measured = np.zeros(shape, bool)
+    order = np.argsort(flat[near], kind="stable")
+    keys, starts, counts = np.unique(flat[near][order], return_index=True, return_counts=True)
+    z_near = xyz[near, 2][order]
+    for key, start, count in zip(keys, starts, counts, strict=True):
+        if count >= sp.floor_cell_min_points:
+            heights.flat[key] = np.median(z_near[start : start + count])
+            measured.flat[key] = True
+    if not measured.any():
+        return np.zeros(len(xyz))
+    _, nearest = ndimage.distance_transform_edt(~measured, return_indices=True)
+    heights = heights[tuple(nearest)]
+    return heights.flat[flat]
+
+
 def remove_planes(
-    xyz: np.ndarray, normals: np.ndarray, planes: list[dict], sp: SegmentParams
+    xyz: np.ndarray,
+    normals: np.ndarray,
+    planes: list[dict],
+    floor_z: np.ndarray,
+    sp: SegmentParams,
 ) -> np.ndarray:
     """Structural plane point = inside the band AND normal aligned with the plane axis.
+    The floor band follows the local floor height, and its innermost part ignores normals.
     Adds `idx` to each plane, returns the mask of remaining points."""
     remaining = np.ones(len(xyz), bool)
     for p in planes:
-        band = np.abs(xyz[:, p["axis"]] - p["value"]) < sp.plane_tol
+        offset = xyz[:, p["axis"]] - (floor_z if p["name"] == "floor" else p["value"])
+        band = np.abs(offset) < sp.plane_tol
         m = remaining & band & (np.abs(normals[:, p["axis"]]) > sp.plane_normal_dot)
+        if p["name"] == "floor":
+            m |= remaining & (np.abs(offset) < sp.floor_tight_tol)
         p["idx"] = np.flatnonzero(m)
         remaining &= ~m
         print(
@@ -349,6 +388,15 @@ def filter_overhead(
             o["tags"].append("overhead")
         out.append(o)
     print(f"[overhead] kept {sum('overhead' in o['tags'] for o in out)}, dropped {dropped}")
+    return out
+
+
+def filter_floor_debris(
+    objs: list[dict], xyz: np.ndarray, floor_z: np.ndarray, sp: SegmentParams
+) -> list[dict]:
+    """Drop clusters that never rise more than `min_object_top` above the local floor."""
+    out = [o for o in objs if (xyz[o["idx"], 2] - floor_z[o["idx"]]).max() >= sp.min_object_top]
+    print(f"[floor] dropped {len(objs) - len(out)} floor-level clusters")
     return out
 
 
@@ -550,7 +598,14 @@ def segment(
     """Voxel-level segmentation. Returns (planes, ordered objects, per-point labels) where
     labels are object indices, NOISE or STRUCTURE."""
     planes = detect_planes(xyz, normals, sp)
-    remaining = remove_planes(xyz, normals, planes, sp)
+    floor_z = floor_height(xyz, normals, sp)
+    remaining = remove_planes(
+        xyz=xyz,
+        normals=normals,
+        planes=planes,
+        floor_z=floor_z,
+        sp=sp,
+    )
     planes += ransac_extra_planes(xyz, remaining, sp)
     oi = np.flatnonzero(remaining)
     groups = dbscan_clusters(xyz[oi], sp)
@@ -567,6 +622,7 @@ def segment(
     ]
     ceiling = next((p["value"] for p in planes if p["name"] == "ceiling"), None)
     objs = filter_overhead(objs, xyz, opacity, ceiling, sp)
+    objs = filter_floor_debris(objs, xyz, floor_z, sp)
     objs = merge_collinear_pipes(objs, xyz, sp)
     objs = merge_contained(objs, xyz, sp.contain_tol)
     objs = order_objects(objs, xyz)
