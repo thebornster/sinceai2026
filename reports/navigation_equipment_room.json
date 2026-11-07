@@ -1,0 +1,45 @@
+{
+  "scene_id": "equipment_room",
+  "params": {
+    "resolution": 0.05,
+    "radius": 0.25,
+    "height": 1.8,
+    "head_clearance": 0.2,
+    "max_step_height": 0.15,
+    "min_opacity": 0.4,
+    "min_points_per_cell": 2,
+    "margin": 0.3,
+    "observed_radius": 0.3,
+    "room_percentiles": [
+      0.5,
+      99.5
+    ]
+  },
+  "shape": [
+    224,
+    182
+  ],
+  "room_rectangle": {
+    "min": [
+      -5.259277033805847,
+      -4.253945522308349
+    ],
+    "max": [
+      5.295731015205384,
+      4.221734910011292
+    ]
+  },
+  "fractions": {
+    "free": 0.2790914442700157,
+    "occupied": 0.597453885400314,
+    "unknown": 0.12345467032967034
+  },
+  "walkable_areas_m2": [
+    27.55,
+    0.21,
+    0.2,
+    0.2,
+    0.11
+  ],
+  "preview": "reports/preview/equipment_room_navmap.png"
+}
