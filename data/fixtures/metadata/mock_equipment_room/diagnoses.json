@@ -72,18 +72,18 @@
           "medium": 20,
           "low": 12
         },
-        "text": "39 alarms/events in the sample: 7 high, 20 medium, 12 low."
+        "text": "39 events in the sample (7 high, 20 medium, 12 low); 6 are fault alarms, the rest are routine records."
       },
       {
         "type": "latest_high_alarm",
-        "timestamp": "2026-09-29T01:54:00",
-        "event_type": "SERVICE_RECOMMENDATION",
+        "timestamp": "2026-09-25T03:09:00",
+        "event_type": "DIAGNOSTIC_ALERT",
         "severity": "high",
-        "event_code": "NORMAL_CHECK",
-        "description": "Synthetic monitoring or field-workflow event.",
-        "status": "open",
-        "_source": "Alarms_Events!R461",
-        "text": "Newest high-severity event: SERVICE_RECOMMENDATION / NORMAL_CHECK at 2026-09-29T01:54:00 (open)."
+        "event_code": "CAVITATION_RISK",
+        "description": "Hydraulic instability / cavitation-like signature observed in synthetic diagnostic context.",
+        "status": "closed",
+        "_source": "Alarms_Events!R702",
+        "text": "Newest high-severity fault alarm: DIAGNOSTIC_ALERT / CAVITATION_RISK at 2026-09-25T03:09:00 (closed)."
       }
     ],
     "likely_cause": [
@@ -168,24 +168,24 @@
         "value": 63.637
       },
       {
-        "source": "Alarms_Events!R461",
+        "source": "Alarms_Events!R702",
         "field": "timestamp",
-        "value": "2026-09-29T01:54:00"
+        "value": "2026-09-25T03:09:00"
       },
       {
-        "source": "Alarms_Events!R461",
+        "source": "Alarms_Events!R702",
         "field": "event_type",
-        "value": "SERVICE_RECOMMENDATION"
+        "value": "DIAGNOSTIC_ALERT"
       },
       {
-        "source": "Alarms_Events!R461",
+        "source": "Alarms_Events!R702",
         "field": "severity",
         "value": "high"
       },
       {
-        "source": "Alarms_Events!R461",
+        "source": "Alarms_Events!R702",
         "field": "event_code",
-        "value": "NORMAL_CHECK"
+        "value": "CAVITATION_RISK"
       },
       {
         "source": "Historical_Service_Cases!R23",
@@ -302,18 +302,18 @@
           "medium": 23,
           "low": 8
         },
-        "text": "38 alarms/events in the sample: 7 high, 23 medium, 8 low."
+        "text": "38 events in the sample (7 high, 23 medium, 8 low); none are fault alarms, all are routine records."
       },
       {
         "type": "latest_high_alarm",
-        "timestamp": "2026-10-07T11:25:00",
-        "event_type": "SERVICE_RECOMMENDATION",
-        "severity": "high",
-        "event_code": "NORMAL_CHECK",
-        "description": "Synthetic monitoring or field-workflow event.",
-        "status": "acknowledged",
-        "_source": "Alarms_Events!R603",
-        "text": "Newest high-severity event: SERVICE_RECOMMENDATION / NORMAL_CHECK at 2026-10-07T11:25:00 (acknowledged)."
+        "timestamp": null,
+        "event_type": null,
+        "severity": null,
+        "event_code": null,
+        "description": null,
+        "status": null,
+        "_source": null,
+        "text": "No high-severity fault alarm in the sample; all 7 high-severity events are routine records."
       }
     ],
     "likely_cause": [],
@@ -385,26 +385,6 @@
         "source": "Telemetry_Sample_3d!R289",
         "field": "process_flow_pct",
         "value": 51.619
-      },
-      {
-        "source": "Alarms_Events!R603",
-        "field": "timestamp",
-        "value": "2026-10-07T11:25:00"
-      },
-      {
-        "source": "Alarms_Events!R603",
-        "field": "event_type",
-        "value": "SERVICE_RECOMMENDATION"
-      },
-      {
-        "source": "Alarms_Events!R603",
-        "field": "severity",
-        "value": "high"
-      },
-      {
-        "source": "Alarms_Events!R603",
-        "field": "event_code",
-        "value": "NORMAL_CHECK"
       },
       {
         "source": "Current_State!R3",
@@ -511,18 +491,18 @@
           "medium": 10,
           "low": 10
         },
-        "text": "32 alarms/events in the sample: 12 high, 10 medium, 10 low."
+        "text": "32 events in the sample (12 high, 10 medium, 10 low); none are fault alarms, all are routine records."
       },
       {
         "type": "latest_high_alarm",
-        "timestamp": "2026-10-06T08:12:00",
-        "event_type": "INSPECTION_NOTE",
-        "severity": "high",
-        "event_code": "NORMAL_CHECK",
-        "description": "Synthetic monitoring or field-workflow event.",
-        "status": "closed",
-        "_source": "Alarms_Events!R224",
-        "text": "Newest high-severity event: INSPECTION_NOTE / NORMAL_CHECK at 2026-10-06T08:12:00 (closed)."
+        "timestamp": null,
+        "event_type": null,
+        "severity": null,
+        "event_code": null,
+        "description": null,
+        "status": null,
+        "_source": null,
+        "text": "No high-severity fault alarm in the sample; all 12 high-severity events are routine records."
       }
     ],
     "likely_cause": [],
@@ -594,26 +574,6 @@
         "source": "Telemetry_Sample_3d!R145",
         "field": "process_pressure_bar",
         "value": 4.991
-      },
-      {
-        "source": "Alarms_Events!R224",
-        "field": "timestamp",
-        "value": "2026-10-06T08:12:00"
-      },
-      {
-        "source": "Alarms_Events!R224",
-        "field": "event_type",
-        "value": "INSPECTION_NOTE"
-      },
-      {
-        "source": "Alarms_Events!R224",
-        "field": "severity",
-        "value": "high"
-      },
-      {
-        "source": "Alarms_Events!R224",
-        "field": "event_code",
-        "value": "NORMAL_CHECK"
       },
       {
         "source": "Current_State!R2",

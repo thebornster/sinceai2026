@@ -23,6 +23,28 @@ N_RECENT_ALARMS = 10
 N_RECENT_WORK_ORDERS = 5
 SEVERITY_RANK = {"critical": 0, "high": 1, "medium": 2, "low": 3}
 
+# Alarms_Events holds alarms and routine records. From the workbook itself:
+# - these event_types are workflow/data records, not equipment alarms;
+ROUTINE_EVENT_TYPES = (
+    "SERVICE_RECOMMENDATION",
+    "INSPECTION_NOTE",
+    "WORK_ORDER_CREATED",
+    "DATA_QUALITY",
+)
+# - these event_codes are exactly the rows described as "Synthetic monitoring or
+#   field-workflow event."; every other code has a specific fault-signature description.
+ROUTINE_EVENT_CODES = ("NORMAL_CHECK", "TREND_UPDATE", "MINOR_DEVIATION")
+# What is left (DIAGNOSTIC_ALERT / CONDITION_CHANGE with a fault code) is a fault alarm.
+
+
+def is_fault_event(event: dict[str, Any]) -> bool:
+    """True for a fault alarm, False for a routine record (by event_type or event_code)."""
+    return (
+        event.get("event_type") not in ROUTINE_EVENT_TYPES
+        and event.get("event_code") not in ROUTINE_EVENT_CODES
+    )
+
+
 DEVICE_FIELDS = (
     "tag",
     "asset_class",

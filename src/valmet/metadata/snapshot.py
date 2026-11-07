@@ -179,6 +179,20 @@ def snapshot_record(snapshot_dir: Path, kind: str, object_id: str) -> dict[str, 
     return copy.deepcopy(record) if record is not None else None
 
 
+@lru_cache(maxsize=4)
+def _load_evidence(path: Path, stamp: int) -> dict[str, Any]:
+    return json.loads(path.read_text(encoding="utf-8"))
+
+
+def snapshot_evidence(snapshot_dir: Path, object_id: str) -> dict[str, Any] | None:
+    """A deep copy of one object's evidence bundle from evidence.json, or None."""
+    path = Path(snapshot_dir) / EVIDENCE_FILE
+    if not isinstance(object_id, str) or not path.exists():
+        return None
+    record = _load_evidence(path, path.stat().st_mtime_ns).get(object_id)
+    return copy.deepcopy(record) if record is not None else None
+
+
 def main(argv: list[str] | None = None) -> None:
     args = sys.argv[1:] if argv is None else argv
     scene_id = args[0] if args else "mock_equipment_room"

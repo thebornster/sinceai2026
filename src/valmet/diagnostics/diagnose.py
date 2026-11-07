@@ -13,10 +13,10 @@ import statistics
 from functools import cache
 from typing import Any
 
-from valmet.diagnostics.evidence import _json, get_evidence, resolve
+from valmet.diagnostics.evidence import _json, get_evidence, is_fault_event, resolve
+from valmet.diagnostics.llm_diagnose import LOTO, diagnose_with_llm
 from valmet.metadata.registry import get_registry
 
-LOTO = "Follow site lock-out/tag-out procedures before any physical inspection."
 N_TOP_FINDINGS = 3
 
 
@@ -85,42 +85,51 @@ def _telemetry_findings(ev: dict[str, Any]) -> list[dict[str, Any]]:
     return scored[:N_TOP_FINDINGS]
 
 
+ALARM_KEYS = ("timestamp", "event_type", "severity", "event_code", "description", "status")
+
+
 def _alarm_findings(object_id: str, ev: dict[str, Any]) -> list[dict[str, Any]]:
     _, rec = resolve(object_id)
+    events = [a.model_dump() for a in rec.alarms]  # newest first
+    n_fault = sum(is_fault_event(e) for e in events)
+    split = (
+        f"{n_fault} are fault alarms, the rest are routine records"
+        if n_fault
+        else "none are fault alarms, all are routine records"
+    )
     out: list[dict[str, Any]] = [
         {
             "type": "alarm_summary",
             "total": ev["alarms"]["total"],
             "by_severity": ev["alarms"]["by_severity"],
-            "text": f"{ev['alarms']['total']} alarms/events in the sample: "
+            "text": f"{ev['alarms']['total']} events in the sample ("
             + ", ".join(f"{n} {sev}" for sev, n in ev["alarms"]["by_severity"].items())
-            + ".",
+            + f"); {split}.",
         }
     ]
-    newest_high = next(
-        (a for a in rec.alarms if a.model_dump().get("severity") == "high"), None
-    )  # newest first
-    if newest_high is not None:
-        d = newest_high.model_dump()
+    high = [(a, e) for a, e in zip(rec.alarms, events, strict=True) if e.get("severity") == "high"]
+    newest_fault = next(((a, e) for a, e in high if is_fault_event(e)), None)
+    if newest_fault is not None:
+        row, d = newest_fault
         out.append(
             {
                 "type": "latest_high_alarm",
-                **{
-                    k: _json(d.get(k))
-                    for k in (
-                        "timestamp",
-                        "event_type",
-                        "severity",
-                        "event_code",
-                        "description",
-                        "status",
-                    )
-                },
-                "_source": newest_high.source_ref,
+                **{k: _json(d.get(k)) for k in ALARM_KEYS},
+                "_source": row.source_ref,
                 "text": (
-                    f"Newest high-severity event: {d.get('event_type')} / "
+                    f"Newest high-severity fault alarm: {d.get('event_type')} / "
                     f"{d.get('event_code')} at {_json(d.get('timestamp'))} ({d.get('status')})."
                 ),
+            }
+        )
+    else:
+        routine = f"; all {len(high)} high-severity events are routine records" if high else ""
+        out.append(
+            {
+                "type": "latest_high_alarm",
+                **{k: None for k in ALARM_KEYS},
+                "_source": None,
+                "text": f"No high-severity fault alarm in the sample{routine}.",
             }
         )
     return out
@@ -146,16 +155,19 @@ def _pretty(code: str) -> str:
 # --------------------------------------------------------------------------- #
 # Public
 # --------------------------------------------------------------------------- #
-def diagnose_fault(object_id: str, use_llm: bool = False) -> dict[str, Any]:
-    result = _rule_based(object_id)
-    if use_llm:
-        # LLM path not implemented yet: never crash the viewer, return the rules result.
-        result["method"] = "rule_based_fallback"
-    return result
-
-
-def _rule_based(object_id: str) -> dict[str, Any]:
+def diagnose_fault(object_id: str, use_llm: bool = False, refresh: bool = False) -> dict[str, Any]:
+    """Rule-based diagnosis; with use_llm, the LLM version (or its rule-based fallback)."""
     ev = get_evidence(object_id)
+    result = _rule_based(object_id, ev)
+    if not use_llm:
+        return result
+    return diagnose_with_llm(
+        object_id, result, ev, scene_id=ev["object"]["scene_id"], mode="live", refresh=refresh
+    )
+
+
+def _rule_based(object_id: str, ev: dict[str, Any] | None = None) -> dict[str, Any]:
+    ev = get_evidence(object_id) if ev is None else ev
     dev, cond = ev["device"], ev["condition"]
     evidence: list[dict[str, Any]] = []
 
@@ -181,7 +193,7 @@ def _rule_based(object_id: str) -> dict[str, Any]:
     for f in findings:
         if f["type"] == "telemetry_deviation":
             cite(f["_source"], f["field"], f["last"])
-        elif f["type"] == "latest_high_alarm":
+        elif f["type"] == "latest_high_alarm" and f["_source"]:
             for k in ("timestamp", "event_type", "severity", "event_code"):
                 cite(f["_source"], k, f[k])
 

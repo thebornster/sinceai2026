@@ -3,11 +3,21 @@ import shutil
 
 import pytest
 
-from metadata_testutils import MOCK_METADATA_DIR, MOCK_OBJECT_IDS, requires_workbook
+from metadata_testutils import (
+    FAKE_API_KEY,
+    MOCK_METADATA_DIR,
+    MOCK_OBJECT_IDS,
+    FakeLLMClient,
+    fake_llm_answer,
+    isolate_llm,
+    requires_workbook,
+    wrap_reply,
+)
 from valmet import api
 from valmet.common.artifacts import ASSET_MAPPING_FILE
 from valmet.diagnostics import diagnose as diagnose_mod
 from valmet.diagnostics import evidence as evidence_mod
+from valmet.diagnostics import llm_client, llm_diagnose
 from valmet.diagnostics.evidence import UnknownObjectError, get_evidence
 from valmet.metadata.excel_loader import WORKBOOK_ENV
 from valmet.metadata.mapping import DETAILS_FILE, METADATA_DIR_ENV, use_metadata_dir
@@ -26,9 +36,21 @@ SCENE = "mock_equipment_room"
 NEARBY_IDS = ["obj_0003", "obj_9999", "obj_0001", None, "obj_014", "obj_0002"]
 
 
+@pytest.fixture(scope="module", autouse=True)
+def _no_real_llm(tmp_path_factory):
+    with pytest.MonkeyPatch.context() as mp:
+        isolate_llm(mp, tmp_path_factory.mktemp("llm_cache"))
+        yield
+
+
 @pytest.fixture(autouse=True)
 def _mock_scene(monkeypatch):
     monkeypatch.delenv(METADATA_DIR_ENV, raising=False)
+
+
+def _no_reason(results):
+    """LLM fallbacks differ only in fallback_reason between modes (no key vs offline)."""
+    return {o: {k: v for k, v in d.items() if k != "fallback_reason"} for o, d in results.items()}
 
 
 @pytest.fixture(scope="module")
@@ -38,7 +60,7 @@ def live():
     return {
         "assets": {o: api.get_asset(o) for o in MOCK_OBJECT_IDS},
         "diagnoses": {o: api.diagnose_fault(o) for o in MOCK_OBJECT_IDS},
-        "llm": {o: api.diagnose_fault(o, use_llm=True) for o in MOCK_OBJECT_IDS},
+        "llm": _no_reason({o: api.diagnose_fault(o, use_llm=True) for o in MOCK_OBJECT_IDS}),
         "nearby": api.get_nearby_assets(NEARBY_IDS),
     }
 
@@ -63,7 +85,7 @@ def _snapshot_results(**kw):
     return {
         "assets": {o: api.get_asset(o, **kw) for o in MOCK_OBJECT_IDS},
         "diagnoses": {o: api.diagnose_fault(o, **kw) for o in MOCK_OBJECT_IDS},
-        "llm": {o: api.diagnose_fault(o, use_llm=True, **kw) for o in MOCK_OBJECT_IDS},
+        "llm": _no_reason({o: api.diagnose_fault(o, use_llm=True, **kw) for o in MOCK_OBJECT_IDS}),
         "nearby": api.get_nearby_assets(NEARBY_IDS, **kw),
     }
 
@@ -111,6 +133,32 @@ def test_all_snapshot_outputs_json_serialisable(excel_missing, no_live):
     json.dumps(_snapshot_results())
 
 
+def test_llm_in_snapshot_mode_checks_citations_against_snapshot(
+    live, excel_missing, no_live, monkeypatch, tmp_path
+):
+    """Workbook missing: the LLM still runs, with evidence and citations from the snapshot."""
+    rules = api.diagnose_fault("obj_0001")
+    answer = fake_llm_answer(rules)
+    next(e for e in answer["evidence"] if e["field"] == "tag")["value"] = "P-999"
+    client = FakeLLMClient([wrap_reply(answer), wrap_reply(answer)])  # repair: same mistake
+    monkeypatch.setenv(llm_client.API_KEY_ENV, FAKE_API_KEY)
+    monkeypatch.setattr(llm_diagnose, "CACHE_ROOT", tmp_path)
+    monkeypatch.setattr(llm_client, "make_client", lambda _s: client)
+
+    d = api.diagnose_fault("obj_0001", use_llm=True)
+    assert d["method"] == "llm" and len(client.calls) == 2
+    (fail,) = d["citation_check"]["failed"]
+    assert (fail["kind"], fail["source"], fail["expected"]) == (
+        "value_mismatch",
+        "Asset_Master!R15",
+        "P-002",
+    )
+    assert d["llm"]["citation_repair"]["failed_after"] == d["citation_check"]["failed"]
+    # offline=True then serves the cached LLM result without calling the API again.
+    assert api.diagnose_fault("obj_0001", use_llm=True, offline=True) == d
+    assert len(client.calls) == 2
+
+
 # --------------------------------------------------------------------------- #
 # Snapshot files
 # --------------------------------------------------------------------------- #
@@ -135,6 +183,27 @@ def test_snapshot_is_reproducible(tmp_path):
 def test_committed_snapshot_is_current(tmp_path):
     fresh = export_snapshot(SCENE, out_dir=tmp_path / "fresh", source_dir=MOCK_METADATA_DIR)
     assert _read_all(fresh) == _read_all(MOCK_METADATA_DIR)
+
+
+COMMITTED_LLM = MOCK_METADATA_DIR / llm_diagnose.CACHE_SUBDIR / "obj_0001.json"
+
+
+def test_committed_llm_cache_is_current(monkeypatch):
+    """The committed demo answer must match today's rules, evidence, prompt and model."""
+    assert COMMITTED_LLM.exists(), f"missing; build it with: {llm_diagnose.REBUILD_HINT}"
+    cached = json.loads(COMMITTED_LLM.read_text(encoding="utf-8"))
+    assert cached["method"] == "llm"
+    assert cached["citation_check"]["ok"], cached["citation_check"]["failed"]
+    assert cached["llm"]["model"] == llm_client.DEFAULT_CACHE_MODEL
+    assert cached["llm"]["role"] == "cache"
+    expected = llm_diagnose.input_sha256(api.diagnose_fault("obj_0001"), get_evidence("obj_0001"))
+    assert cached["llm"]["input_sha256"] == expected, (
+        f"stale (rules, evidence or prompt changed); rebuild: {llm_diagnose.REBUILD_HINT}"
+    )
+    assert "api_key" not in COMMITTED_LLM.read_text(encoding="utf-8").lower()
+    # Offline, the API serves exactly this file.
+    monkeypatch.setattr(llm_diagnose, "CACHE_ROOT", MOCK_METADATA_DIR.parent)
+    assert api.diagnose_fault("obj_0001", use_llm=True, offline=True) == cached
 
 
 def test_snapshot_meta_contents(tmp_path):

@@ -1,0 +1,465 @@
+{
+  "object_id": "obj_0001",
+  "device_id": "ASSET-014",
+  "asset_id": "ASSET-014",
+  "tag": "P-002",
+  "is_target": true,
+  "summary": "P-002 / ASSET-014 (PROCESS_PUMP, Chemical Preparation) is attention_required with health score 45/100 and high urgency (Current_State!R15): over the 3-day sample vibration climbed from 1.859 mm/s (Telemetry_Sample_3d!R1874) to 5.213 mm/s (Telemetry_Sample_3d!R2017) while discharge pressure fell from 4.278 to 3.752 bar and flow from 71.031 to 63.637% (Telemetry_Sample_3d!R1874, Telemetry_Sample_3d!R2017) at essentially constant speed - a cavitation-like hydraulic signature matching historical cases CASE-022, CASE-026 and CASE-049 (Historical_Service_Cases!R23, Historical_Service_Cases!R27, Historical_Service_Cases!R50). First action on site: inspect suction-side process conditions (Current_State!R15).",
+  "findings": [
+    {
+      "type": "condition",
+      "field": null,
+      "text": "Condition state attention_required, health score 45/100, urgency high, issue code CAVITATION_RISK ('Hydraulic instability / cavitation-like signature') (Current_State!R15). Recommended next check: inspect process conditions (Current_State!R15).",
+      "_source": "Current_State!R15"
+    },
+    {
+      "type": "telemetry_trend",
+      "field": "vibration_mm_s",
+      "text": "vibration_mm_s rose from 1.859 at 2026-10-05T00:00 (Telemetry_Sample_3d!R1874) to 5.213 at 2026-10-07T23:30 (Telemetry_Sample_3d!R2017), change +3.354 (derived from Telemetry_Sample_3d!R1874 and Telemetry_Sample_3d!R2017); the last sample is also the 3-day maximum, so the rise is still in progress. Versus healthy peers ASSET-015/ASSET-018 this is z = +15.4 (derived from Telemetry_Sample_3d!R2017 and healthy-peer telemetry).",
+      "_source": "Telemetry_Sample_3d!R2017"
+    },
+    {
+      "type": "telemetry_trend",
+      "field": "process_pressure_bar",
+      "text": "process_pressure_bar fell from 4.278 (Telemetry_Sample_3d!R1874) to 3.752 (Telemetry_Sample_3d!R2017), change -0.526 (derived from Telemetry_Sample_3d!R1874 and Telemetry_Sample_3d!R2017); the 3-day minimum of 3.678 was recorded at 2026-10-07T20:30 (Telemetry_Sample_3d!R2011), near the end of the window. Versus healthy peers z = -4.3 (derived from Telemetry_Sample_3d!R2017 and healthy-peer telemetry).",
+      "_source": "Telemetry_Sample_3d!R2017"
+    },
+    {
+      "type": "telemetry_trend",
+      "field": "process_flow_pct",
+      "text": "process_flow_pct fell from 71.031 (Telemetry_Sample_3d!R1874) to 63.637 (Telemetry_Sample_3d!R2017), change -7.394 (derived from Telemetry_Sample_3d!R1874 and Telemetry_Sample_3d!R2017); the 3-day minimum of 62.53 occurred at 2026-10-07T23:00 (Telemetry_Sample_3d!R2016), again at the end of the window. Versus healthy peers z = -2.5 (derived from Telemetry_Sample_3d!R2017 and healthy-peer telemetry).",
+      "_source": "Telemetry_Sample_3d!R2017"
+    },
+    {
+      "type": "telemetry_trend",
+      "field": "bearing_temp_c",
+      "text": "bearing_temp_c shows no upward trend: 53.851 at the start (Telemetry_Sample_3d!R1874) and 52.82 at the end (Telemetry_Sample_3d!R2017), change -1.031 (derived from Telemetry_Sample_3d!R1874 and Telemetry_Sample_3d!R2017).",
+      "_source": "Telemetry_Sample_3d!R2017"
+    },
+    {
+      "type": "telemetry_trend",
+      "field": "motor_current_a",
+      "text": "motor_current_a drifted slightly down from 38.889 (Telemetry_Sample_3d!R1874) to 37.793 (Telemetry_Sample_3d!R2017), change -1.096 (derived from Telemetry_Sample_3d!R1874 and Telemetry_Sample_3d!R2017).",
+      "_source": "Telemetry_Sample_3d!R2017"
+    },
+    {
+      "type": "telemetry_trend",
+      "field": "speed_rpm",
+      "text": "speed_rpm stayed in a narrow band: 1471.207 at the start (Telemetry_Sample_3d!R1874) and 1484.841 at the end (Telemetry_Sample_3d!R2017), change +13.634 (derived from Telemetry_Sample_3d!R1874 and Telemetry_Sample_3d!R2017) - the pump has not slowed down.",
+      "_source": "Telemetry_Sample_3d!R2017"
+    },
+    {
+      "type": "data_quality",
+      "field": "signal_quality_pct",
+      "text": "signal_quality_pct is constant at 99.4 across the window (Telemetry_Sample_3d!R1874, Telemetry_Sample_3d!R2017), so the observed deviations are not a sensor or data artefact.",
+      "_source": "Telemetry_Sample_3d!R2017"
+    },
+    {
+      "type": "alarm_summary",
+      "field": null,
+      "text": "39 events in the sample (7 high, 20 medium, 12 low); 6 are fault alarms, the rest are routine records such as SERVICE_RECOMMENDATION, DATA_QUALITY and WORK_ORDER_CREATED entries, including routine records carrying the CAVITATION_RISK code that are not fault alarms.",
+      "_source": null
+    },
+    {
+      "type": "latest_high_alarm",
+      "field": "event_code",
+      "text": "Newest high-severity fault alarm: DIAGNOSTIC_ALERT / CAVITATION_RISK at 2026-09-25T03:09:00, status closed (Alarms_Events!R702).",
+      "_source": "Alarms_Events!R702"
+    },
+    {
+      "type": "open_fault_alarm",
+      "field": "event_code",
+      "text": "An open medium-severity fault alarm DIAGNOSTIC_ALERT / CAVITATION_RISK was raised at 2026-10-05T06:16:00 (Alarms_Events!R137), at the start of this telemetry window and just after the 3-day vibration minimum of 1.749 recorded at 2026-10-05T02:30 (Telemetry_Sample_3d!R1879) - the climb in vibration began around the time this alarm appeared.",
+      "_source": "Alarms_Events!R137"
+    },
+    {
+      "type": "maintenance_history",
+      "field": null,
+      "text": "Recent history: predictive seal inspection on 2025-10-23 with result follow_up_required (Maintenance_History!R166), corrective seal inspection on 2025-11-04 with result service_completed (Maintenance_History!R273); last service date 2025-11-13 (Asset_Master!R15).",
+      "_source": "Maintenance_History!R166"
+    }
+  ],
+  "likely_cause": [
+    {
+      "text": "Hypothesis: suction-side starvation causing cavitation-like hydraulic instability - vibration rising steeply while discharge pressure and flow fall at constant speed is the signature reported in historical PROCESS_PUMP CAVITATION_RISK cases CASE-022, CASE-026 and CASE-049 (Historical_Service_Cases!R23, Historical_Service_Cases!R27, Historical_Service_Cases!R50) and matches the multivariate pattern DOC-PROCESS_PUMP-CORE says to look for (Knowledge_Docs!R3).",
+      "case_id": "CASE-022",
+      "_source": "Historical_Service_Cases!R23"
+    },
+    {
+      "text": "Hypothesis: the primary problem is hydraulic rather than mechanical - bearing temperature stayed flat (Telemetry_Sample_3d!R1874, Telemetry_Sample_3d!R2017) and motor current slightly decreased while speed held steady, which argues against a bearing or drivetrain root cause; if suction conditions prove normal on site, internal hydraulic wear (for example impeller erosion after a period of cavitation) becomes the secondary candidate to verify, consistent with the knowledge document's advice to use all signals together and verify locally (Knowledge_Docs!R3).",
+      "case_id": null,
+      "_source": "Knowledge_Docs!R3"
+    }
+  ],
+  "explanation": "The 3-day trend shows a classic hydraulic pattern: vibration climbed from 1.859 to 5.213 mm/s (Telemetry_Sample_3d!R1874, Telemetry_Sample_3d!R2017) while discharge pressure fell from 4.278 to 3.752 bar and flow from 71.031 to 63.637% (Telemetry_Sample_3d!R1874, Telemetry_Sample_3d!R2017), with speed essentially constant at about 1480 rpm, so the performance loss is not a drive or speed problem. Rising vibration together with falling pressure and flow at constant speed is exactly the consistent multivariate change DOC-PROCESS_PUMP-CORE describes (Knowledge_Docs!R3), and it is the same signature recorded in historical CAVITATION_RISK cases CASE-022, CASE-026 and CASE-049 on this pump class (Historical_Service_Cases!R23, Historical_Service_Cases!R27, Historical_Service_Cases!R50). General background: when a pump cavitates, vapour bubbles form at the impeller inlet and collapse further inside, which shakes the machine and simultaneously destroys the head and flow it can produce. Supporting signals are present: motor current eased down from 38.889 to 37.793 A (Telemetry_Sample_3d!R1874, Telemetry_Sample_3d!R2017), consistent with the pump doing less hydraulic work, and bearing temperature stayed flat at about 53 C (Telemetry_Sample_3d!R1874, Telemetry_Sample_3d!R2017), arguing against a bearing-origin fault. Expected confirming signals are missing from the evidence: there is no suction pressure or NPSH measurement and no acoustic sensor, so suction starvation cannot be proven from data alone and must be verified locally, as both the knowledge document and CASE-022 require (Knowledge_Docs!R3, Historical_Service_Cases!R23).",
+  "safety_precautions": [
+    {
+      "text": "Confirm asset identity; review trend + events; compare baseline; follow approved safety and maintenance procedures.",
+      "case_id": "CASE-022",
+      "_source": "Historical_Service_Cases!R23"
+    },
+    {
+      "text": "Follow site lock-out/tag-out procedures before any physical inspection.",
+      "case_id": null,
+      "_source": null
+    }
+  ],
+  "next_steps": [
+    {
+      "priority": 1,
+      "text": "Confirm asset identity and baseline: verify the tag P-002 / ASSET-014 at the skid and compare local gauge and panel indications with the telemetry trend before any hands-on work.",
+      "look_for": "Nameplate and tag match P-002 / ASSET-014; local discharge pressure and flow indications broadly consistent with the latest telemetry of 3.752 bar and 63.637% (Telemetry_Sample_3d!R2017).",
+      "confirms": "Local readings match telemetry, confirming the right asset and valid monitoring data.",
+      "rules_out": "A large mismatch between local gauges and telemetry would point to an instrumentation problem rather than a pump fault.",
+      "basis": "hypothesis",
+      "_source": "Historical_Service_Cases!R23"
+    },
+    {
+      "priority": 2,
+      "text": "Inspect process conditions on the suction side, as recommended: check suction supply level, suction strainer condition and the position of suction-line isolation valves. Observation only - record what you find, do not operate any valve.",
+      "look_for": "Low supply-tank level, a fouled or blocked suction strainer, a suction valve not fully open, or air ingress at suction flanges. General background: each of these starves the pump of inlet pressure and is a classic field cause of cavitation.",
+      "confirms": "Low level, blocked strainer or a restricted suction line would directly explain falling pressure and flow with rising vibration.",
+      "rules_out": "Adequate level, clean strainer and a fully open suction path would shift suspicion toward internal wear inside the pump.",
+      "basis": "evidence",
+      "_source": "Current_State!R15"
+    },
+    {
+      "priority": 3,
+      "text": "With the pump running, listen and observe at the casing and suction line from a safe position.",
+      "look_for": "General background: active cavitation typically sounds like crackling or gravel passing through the casing and often coincides with visible fluctuation of the discharge pressure gauge.",
+      "confirms": "Intermittent crackling or rattling noise that tracks with pressure and flow fluctuation supports the cavitation hypothesis.",
+      "rules_out": "A quiet, smooth-running pump with steady local gauges would make active cavitation unlikely and redirect the investigation.",
+      "basis": "general background",
+      "_source": null
+    },
+    {
+      "priority": 4,
+      "text": "Verify the mechanical signals locally, using vibration, bearing temperature, pressure, flow and motor load together as the knowledge document directs: take a handheld vibration reading and an infrared bearing-housing temperature and compare them with telemetry.",
+      "look_for": "Local vibration elevated in line with the 5.213 mm/s telemetry value and bearing housing temperature near the 52.82 C telemetry value rather than climbing (Telemetry_Sample_3d!R2017).",
+      "confirms": "High vibration with normal bearing temperature confirms a hydraulic rather than bearing-origin problem.",
+      "rules_out": "Normal local vibration, or a hot bearing housing, would contradict the cavitation hypothesis and suggest a mechanical fault instead.",
+      "basis": "hypothesis",
+      "_source": "Knowledge_Docs!R3"
+    },
+    {
+      "priority": 5,
+      "text": "Document all findings and escalate to operations and maintenance for authorised action under approved procedures, including a review of the still-open CAVITATION_RISK fault alarm and a decision on internal inspection if suction conditions prove normal.",
+      "look_for": "Recorded suction-side condition, noise observations and local measurements, plus review of the open fault alarm from 2026-10-05T06:16 (Alarms_Events!R137) with the operations team.",
+      "confirms": "If suction conditions are normal, persistent performance loss at constant speed justifies an authorised internal inspection for impeller erosion or wear.",
+      "rules_out": "If a suction restriction is found, corrected by authorised staff, and vibration, pressure and flow recover, internal wear becomes unlikely.",
+      "basis": "hypothesis",
+      "_source": "Historical_Service_Cases!R23"
+    }
+  ],
+  "evidence": [
+    {
+      "source": "Asset_Master!R15",
+      "field": "tag",
+      "value": "P-002"
+    },
+    {
+      "source": "Asset_Master!R15",
+      "field": "asset_class",
+      "value": "PROCESS_PUMP"
+    },
+    {
+      "source": "Asset_Master!R15",
+      "field": "area_name",
+      "value": "Chemical Preparation"
+    },
+    {
+      "source": "Asset_Master!R15",
+      "field": "last_service_date",
+      "value": "2025-11-13T00:00:00"
+    },
+    {
+      "source": "Current_State!R15",
+      "field": "condition_state",
+      "value": "attention_required"
+    },
+    {
+      "source": "Current_State!R15",
+      "field": "health_score",
+      "value": 45
+    },
+    {
+      "source": "Current_State!R15",
+      "field": "urgency",
+      "value": "high"
+    },
+    {
+      "source": "Current_State!R15",
+      "field": "issue_code",
+      "value": "CAVITATION_RISK"
+    },
+    {
+      "source": "Current_State!R15",
+      "field": "issue_summary",
+      "value": "Hydraulic instability / cavitation-like signature"
+    },
+    {
+      "source": "Current_State!R15",
+      "field": "recommended_next_check",
+      "value": "inspect process conditions"
+    },
+    {
+      "source": "Current_State!R15",
+      "field": "model_confidence",
+      "value": 0.68
+    },
+    {
+      "source": "Telemetry_Sample_3d!R1874",
+      "field": "vibration_mm_s",
+      "value": 1.859
+    },
+    {
+      "source": "Telemetry_Sample_3d!R2017",
+      "field": "vibration_mm_s",
+      "value": 5.213
+    },
+    {
+      "source": "Telemetry_Sample_3d!R1879",
+      "field": "vibration_mm_s",
+      "value": 1.749
+    },
+    {
+      "source": "Telemetry_Sample_3d!R1874",
+      "field": "process_pressure_bar",
+      "value": 4.278
+    },
+    {
+      "source": "Telemetry_Sample_3d!R2017",
+      "field": "process_pressure_bar",
+      "value": 3.752
+    },
+    {
+      "source": "Telemetry_Sample_3d!R2011",
+      "field": "process_pressure_bar",
+      "value": 3.678
+    },
+    {
+      "source": "Telemetry_Sample_3d!R1874",
+      "field": "process_flow_pct",
+      "value": 71.031
+    },
+    {
+      "source": "Telemetry_Sample_3d!R2017",
+      "field": "process_flow_pct",
+      "value": 63.637
+    },
+    {
+      "source": "Telemetry_Sample_3d!R2016",
+      "field": "process_flow_pct",
+      "value": 62.53
+    },
+    {
+      "source": "Telemetry_Sample_3d!R1874",
+      "field": "bearing_temp_c",
+      "value": 53.851
+    },
+    {
+      "source": "Telemetry_Sample_3d!R2017",
+      "field": "bearing_temp_c",
+      "value": 52.82
+    },
+    {
+      "source": "Telemetry_Sample_3d!R1874",
+      "field": "motor_current_a",
+      "value": 38.889
+    },
+    {
+      "source": "Telemetry_Sample_3d!R2017",
+      "field": "motor_current_a",
+      "value": 37.793
+    },
+    {
+      "source": "Telemetry_Sample_3d!R1874",
+      "field": "speed_rpm",
+      "value": 1471.207
+    },
+    {
+      "source": "Telemetry_Sample_3d!R2017",
+      "field": "speed_rpm",
+      "value": 1484.841
+    },
+    {
+      "source": "Telemetry_Sample_3d!R1874",
+      "field": "signal_quality_pct",
+      "value": 99.4
+    },
+    {
+      "source": "Telemetry_Sample_3d!R2017",
+      "field": "signal_quality_pct",
+      "value": 99.4
+    },
+    {
+      "source": "Alarms_Events!R702",
+      "field": "timestamp",
+      "value": "2026-09-25T03:09:00"
+    },
+    {
+      "source": "Alarms_Events!R702",
+      "field": "event_type",
+      "value": "DIAGNOSTIC_ALERT"
+    },
+    {
+      "source": "Alarms_Events!R702",
+      "field": "severity",
+      "value": "high"
+    },
+    {
+      "source": "Alarms_Events!R702",
+      "field": "event_code",
+      "value": "CAVITATION_RISK"
+    },
+    {
+      "source": "Alarms_Events!R702",
+      "field": "status",
+      "value": "closed"
+    },
+    {
+      "source": "Alarms_Events!R137",
+      "field": "timestamp",
+      "value": "2026-10-05T06:16:00"
+    },
+    {
+      "source": "Alarms_Events!R137",
+      "field": "event_type",
+      "value": "DIAGNOSTIC_ALERT"
+    },
+    {
+      "source": "Alarms_Events!R137",
+      "field": "severity",
+      "value": "medium"
+    },
+    {
+      "source": "Alarms_Events!R137",
+      "field": "event_code",
+      "value": "CAVITATION_RISK"
+    },
+    {
+      "source": "Alarms_Events!R137",
+      "field": "status",
+      "value": "open"
+    },
+    {
+      "source": "Historical_Service_Cases!R23",
+      "field": "historical_issue_code",
+      "value": "CAVITATION_RISK"
+    },
+    {
+      "source": "Historical_Service_Cases!R23",
+      "field": "historical_interpretation",
+      "value": "Hydraulic instability / cavitation-like signature"
+    },
+    {
+      "source": "Historical_Service_Cases!R23",
+      "field": "recommended_next_check",
+      "value": "inspect process conditions"
+    },
+    {
+      "source": "Historical_Service_Cases!R23",
+      "field": "safe_evidence_workflow",
+      "value": "Confirm asset identity; review trend + events; compare baseline; follow approved safety and maintenance procedures."
+    },
+    {
+      "source": "Historical_Service_Cases!R27",
+      "field": "historical_interpretation",
+      "value": "Hydraulic instability / cavitation-like signature"
+    },
+    {
+      "source": "Historical_Service_Cases!R50",
+      "field": "historical_interpretation",
+      "value": "Hydraulic instability / cavitation-like signature"
+    },
+    {
+      "source": "Knowledge_Docs!R3",
+      "field": "doc_id",
+      "value": "DOC-PROCESS_PUMP-CORE"
+    },
+    {
+      "source": "Knowledge_Docs!R3",
+      "field": "content",
+      "value": "Use vibration, bearing temperature, pressure, flow and motor load together. Look for consistent multivariate changes and verify locally before maintenance work."
+    },
+    {
+      "source": "Maintenance_History!R166",
+      "field": "opened_at",
+      "value": "2025-10-23T22:00:00"
+    },
+    {
+      "source": "Maintenance_History!R166",
+      "field": "action",
+      "value": "seal inspection"
+    },
+    {
+      "source": "Maintenance_History!R166",
+      "field": "result",
+      "value": "follow_up_required"
+    },
+    {
+      "source": "Maintenance_History!R273",
+      "field": "opened_at",
+      "value": "2025-11-04T00:00:00"
+    },
+    {
+      "source": "Maintenance_History!R273",
+      "field": "action",
+      "value": "seal inspection"
+    },
+    {
+      "source": "Maintenance_History!R273",
+      "field": "result",
+      "value": "service_completed"
+    }
+  ],
+  "confidence": 0.68,
+  "method": "llm",
+  "citation_check": {
+    "ok": true,
+    "checked": 115,
+    "failed": []
+  },
+  "llm": {
+    "role": "cache",
+    "base_url": "https://api.featherless.ai/v1",
+    "model": "moonshotai/Kimi-K3",
+    "temperature": 1.0,
+    "top_p": 0.95,
+    "enable_thinking": null,
+    "timeout_s": 300.0,
+    "max_tokens": 32768,
+    "response_model": "moonshotai/Kimi-K3",
+    "finish_reason": "stop",
+    "attempts": 1,
+    "retry_reason": null,
+    "elapsed_s": 58.05,
+    "citation_repair": null,
+    "filters": {
+      "background_sentences_dropped": [],
+      "safety_dropped": [
+        "General background: treat the unit as running machinery during any walkdown - coordinate with operations before approaching, keep clear of rotating parts and pressurised lines, and do not operate valves, change setpoints or stop/start the pump; those control actions are for authorised staff under site procedures."
+      ],
+      "safety_added": [],
+      "basis_downgraded": [
+        {
+          "priority": 1,
+          "text": "Confirm asset identity and baseline: verify the tag P-002 / ASSET-014 at the skid and compare local gauge and panel indications with the telemetry trend before any hands-on work.",
+          "reason": "Historical_Service_Cases!R23 does not contain the step's instruction"
+        },
+        {
+          "priority": 4,
+          "text": "Verify the mechanical signals locally, using vibration, bearing temperature, pressure, flow and motor load together as the knowledge document directs: take a handheld vibration reading and an infrared bearing-housing temperature and compare them with telemetry.",
+          "reason": "Knowledge_Docs!R3 does not contain the step's instruction"
+        },
+        {
+          "priority": 5,
+          "text": "Document all findings and escalate to operations and maintenance for authorised action under approved procedures, including a review of the still-open CAVITATION_RISK fault alarm and a decision on internal inspection if suction conditions prove normal.",
+          "reason": "Historical_Service_Cases!R23 does not contain the step's instruction"
+        }
+      ]
+    },
+    "created_at": "2026-11-06T23:53:59+00:00",
+    "input_sha256": "76e0686b0f7e969a76409f71538e4c0b4988ce53358482056409bfd9eb608d0d"
+  }
+}

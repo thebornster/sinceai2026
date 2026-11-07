@@ -6,8 +6,8 @@ Teammates call only these three functions:
         -> mapping entry + device + condition
     get_nearby_assets(object_ids, offline=False)
         -> list of get_asset results + status_line
-    diagnose_fault(object_id, use_llm=False, offline=False)
-        -> diagnosis with Excel citations
+    diagnose_fault(object_id, use_llm=False, offline=False, refresh=False)
+        -> diagnosis with Excel citations (use_llm: LLM wording, citation-checked, cached)
 
 All outputs are plain JSON-serialisable types. Every Excel value carries
 ``_source`` as "Sheet!R<row>".
@@ -31,6 +31,7 @@ from typing import Any as _Any
 
 from valmet.diagnostics import diagnose as _diagnose
 from valmet.diagnostics import evidence as _evidence
+from valmet.diagnostics import llm_diagnose as _llm
 from valmet.metadata import snapshot as _snapshot
 from valmet.metadata.excel_loader import workbook_path as _workbook_path
 from valmet.metadata.mapping import metadata_dir as _metadata_dir
@@ -107,17 +108,33 @@ def get_nearby_assets(object_ids: _Iterable[str], offline: bool = False) -> list
     return out
 
 
-def diagnose_fault(object_id: str, use_llm: bool = False, offline: bool = False) -> dict[str, _Any]:
+def diagnose_fault(
+    object_id: str, use_llm: bool = False, offline: bool = False, refresh: bool = False
+) -> dict[str, _Any]:
     """Diagnosis for one object, grounded in Excel rows.
+
+    use_llm=True: an LLM explanation in the same schema (``method: "llm"``), with every
+    citation checked (``citation_check``) and the result cached. On any failure it returns
+    the rule-based result with ``method: "rule_based_fallback"`` and ``fallback_reason``.
+    With offline=True the LLM is never called: cached result, else the fallback.
+    refresh=True ignores the cache and asks the LLM again.
 
     Raises UnknownObjectError (a KeyError) if the object has no mapping.
     """
-    if _use_snapshot(offline):
-        result = _from_snapshot("diagnoses", object_id)
-        if use_llm:
-            result["method"] = "rule_based_fallback"  # same fallback as live mode
-        return result
-    return _diagnose.diagnose_fault(object_id, use_llm=use_llm)
+    if not _use_snapshot(offline):
+        return _diagnose.diagnose_fault(object_id, use_llm=use_llm, refresh=refresh)
+    rules = _from_snapshot("diagnoses", object_id)
+    if not use_llm:
+        return rules
+    snap_dir = _metadata_dir()
+    return _llm.diagnose_with_llm(
+        object_id,
+        rules,
+        _snapshot.snapshot_evidence(snap_dir, object_id),
+        scene_id=_from_snapshot("assets", object_id)["scene_id"],
+        mode="offline" if offline else "snapshot",
+        refresh=refresh,
+    )
 
 
 if __name__ == "__main__":
